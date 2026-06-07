@@ -135,7 +135,7 @@ class Leg:
 
         theta_front = motor[self.name + "_front_pos"]
         theta_back = motor[self.name + "_back_pos"]
-        lenth_base = 0.05
+        lenth_base = 0.0
         length_front_big = length[self.name + "_front_big"]
         length_front_small = length[self.name + "_front_small"]
         length_back_big = length[self.name + "_back_big"]
@@ -212,7 +212,7 @@ class State:
 
         self.x[0,0] = road.x[0,0]#(length["left_wheel"]*motor["left_wheel_pos"] + length["right_wheel"]*motor["right_wheel_pos"])*0.5#+Leg_left.theta*Leg_left.length+Leg_right.theta*Leg_right.length
         self.x[1,0] = imu["euler"][2]#(-length["left_wheel"]*motor["left_wheel_pos"] + length["right_wheel"]*motor["right_wheel_pos"])*0.5/length["R"]
-        self.x[2,0] =imu["euler"][1]# self.x[7,0]*dt#
+        self.x[2,0] = imu["euler"][1]# self.x[7,0]*dt#
         self.x[3,0] = Leg_left.theta
         self.x[4,0] = Leg_right.theta
 

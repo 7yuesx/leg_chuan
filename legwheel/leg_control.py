@@ -9,7 +9,7 @@ import socket
 import struct
 from scipy.spatial.transform import Rotation as R
 
-from user_class import RobotSensor, Leg, State
+from user_class import RobotSensor, Leg, State, LowPassFilter
 from mymath import PID_control
 from pynput import keyboard
 from kalman import Kalman
@@ -23,10 +23,10 @@ flag = 0
 def on_press(key):
     global cmd_v, cmd_omega_w, cmd_hight,jump,flag
     try:
-        if key == keyboard.Key.up: cmd_v = 2.0
-        if key == keyboard.Key.down: cmd_v = -2.0
-        if key == keyboard.Key.left: cmd_omega_w = 10.0
-        if key == keyboard.Key.right: cmd_omega_w = -10.0
+        if key == keyboard.Key.up: cmd_v = 2.5
+        if key == keyboard.Key.down: cmd_v = -2.5
+        if key == keyboard.Key.left: cmd_omega_w = 3.0
+        if key == keyboard.Key.right: cmd_omega_w = -3.0
         if key == keyboard.Key.shift_l:cmd_hight = 0.001
         if key == keyboard.Key.shift_r:cmd_hight = -0.001   
         if key == keyboard.Key.space:jump = 1
@@ -69,18 +69,22 @@ right_length_pos = PID_control(kp=2000, ki=0.0, kd=0, targ_value=0)
 left_length_vel = PID_control(kp=100, ki=0, kd=0, targ_value=0)
 right_length_vel = PID_control(kp=100, ki=0, kd=0, targ_value=0)
 
+
+# z_wheel_l_filter = LowPassFilter(alpha=0.8)
+# z_wheel_r_filter = LowPassFilter(alpha=0.8)
+
 x_target=0
 w_target=0
 x_dot_target=0
 w_dot_target=0
 
-leg_length=0.2
+leg_length=0.12
 j=0
 
 jumped_l=0
 jumped_r=0
 
-U_last = U = np.zeros((4,1))
+b = a = U_last = U = np.zeros((4,1))
 U_out = np.zeros((6,1))
 with mj.viewer.launch_passive(model, data) as viewer:
     
@@ -92,16 +96,16 @@ with mj.viewer.launch_passive(model, data) as viewer:
         state = sensor.get_state()
 
         length = {
-            "left_front_big": 0.0675*2,
-            "left_back_big": 0.0675*2,
-            "left_front_small": 0.1175*2,
-            "left_back_small": 0.1175*2,
+            "left_front_big": 0.21,
+            "left_back_big": 0.21,
+            "left_front_small": 0.2462962962962,
+            "left_back_small": 0.2462962962962,
             "left_wheel":0.05,
 
-            "right_front_big": 0.0675*2,
-            "right_back_big": 0.0675*2,
-            "right_front_small": 0.1175*2,
-            "right_back_small": 0.1175*2,
+            "right_front_big": 0.21,
+            "right_back_big": 0.21,
+            "right_front_small": 0.2462962962962,
+            "right_back_small": 0.2462962962962,
             "right_wheel":0.05,
             
             "R":0.165,
@@ -167,7 +171,11 @@ with mj.viewer.launch_passive(model, data) as viewer:
 
         leg_length+=cmd_hight
 
-         
+        if leg_length<0.12:
+            leg_length=0.12
+        if leg_length>0.3:
+            leg_length=0.3
+
         # left_length_pos.position_pid(leg_length,left.length)
         # right_length_pos.position_pid(leg_length,right.length)
         left_length_pos.position_pid(leg_length,left.length)
@@ -176,27 +184,38 @@ with mj.viewer.launch_passive(model, data) as viewer:
         right_length_vel.position_pid(0,right.length_dot.Diff(right.length))
         
 
-        max1=1000
+        max1=2000
         max2=1000
 
         jumped_r=0
         jumped_l=0
-        if right.length<0.34 and jump and flag:
+        if right.length<0.4 and jump and flag:
             jumped_r=5000
             max1=0
             max2=0
-        elif left.length>=0.34 and jump:
+        elif left.length>=0.3 and jump:
             jumped_r=0
             flag=0
-            #leg_length=0.2
-        if left.length<0.34 and jump and flag:
+            max2=0
+            leg_length=0.12
+        elif left.length<=0.2 and jump:
+            jumped_r=0
+            flag=0
+            
+
+        if left.length<0.4 and jump and flag:
             jumped_l=5000
             max1=0
             max2=0
-        elif left.length>=0.34 and jump:
+        elif left.length>=0.3 and jump:
             jumped_l=0
             flag=0
-            #leg_length=0.2
+            max2=0
+            leg_length=0.12
+        elif left.length<=0.2 and jump:
+            jumped_r=0
+            flag=0
+            
 
         if left_length_pos.output>max1:
             left_length_pos.output=max1
@@ -217,9 +236,9 @@ with mj.viewer.launch_passive(model, data) as viewer:
             right_length_vel.output=-max2
         
 
-        F_l=left_length_vel.output+left_length_pos.output+99.5715*cos(robot_state.x[3,0])+jumped_l
+        F_l=left_length_vel.output+left_length_pos.output+109*cos(robot_state.x[3,0])+jumped_l
         
-        F_r=right_length_vel.output+right_length_pos.output+99.5715*cos(robot_state.x[4,0])+jumped_r
+        F_r=right_length_vel.output+right_length_pos.output+109*cos(robot_state.x[4,0])+jumped_r
 
 
         # left.vmc(0, U[0,0], motor, length)
@@ -231,7 +250,7 @@ with mj.viewer.launch_passive(model, data) as viewer:
         P_l=F_l*cos(robot_state.x[3,0])+U[0,0]*sin(robot_state.x[3,0])/left.length
         P_r=F_r*cos(robot_state.x[4,0])+U[1,0]*sin(robot_state.x[4,0])/right.length
 
-        m_l=m_r=0.5*20.3
+        m_l=m_r=0.353429173529
         g=9.81
 
         w=imu["quat"][0]
@@ -251,12 +270,16 @@ with mj.viewer.launch_passive(model, data) as viewer:
             
         # if(z_wheel_r<0):
 
-        Fn_l=P_l+m_l*g+z_wheel_l*g    
-        Fn_r=P_r+m_r*g+z_wheel_r*g    
+        # z_wheel_l=z_wheel_l_filter.update(z_wheel_l)
+        # z_wheel_r=z_wheel_r_filter.update(z_wheel_r)
+
+        Fn_l=P_l+m_l*g+z_wheel_l*m_l    
+        Fn_r=P_r+m_r*g+z_wheel_r*m_r
 
 
 
-        if(Fn_l<15):
+
+        if(Fn_l<20):
             F_c[0,0]=0
             F_c[0,1]=0
             F_c[0,2]=0
@@ -278,8 +301,10 @@ with mj.viewer.launch_passive(model, data) as viewer:
             F_c[2,7]=0
             F_c[2,8]=0
             F_c[2,9]=0
+
+            
             # U[2,0]=0
-        if(Fn_r<15): 
+        if(Fn_r<20): 
             F_c[1,0]=0
             F_c[1,1]=0
             F_c[1,2]=0
@@ -301,13 +326,25 @@ with mj.viewer.launch_passive(model, data) as viewer:
             F_c[3,7]=0
             F_c[3,8]=0
             F_c[3,9]=0
+
+           
             # U[3,0]=0
 
         road.filter(z_body,motor,length,dt)    
 
+        # U=U_last-F_convergence @ (np.block([[robot_state.update_state(left, right, length, motor,imu, road)],
+        #                     [robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)],
+        #                     [robot_state.update_control(U_last)]]))
 
-        U=-F_c @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target))
-       
+        # U_d=Bd.T @ (I-Ad)@robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)
+        # U=U_d-F_convergence @ (np.block([[robot_state.update_state(left, right, length, motor, imu, road)],
+        #                     [robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)]]))
+
+
+        U=-F_c @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)) + b
+    
+
+      
         left.vmc(F_l, U[0,0], motor, length)
         right.vmc(F_r, U[1,0], motor, length)
 
@@ -355,14 +392,19 @@ with mj.viewer.launch_passive(model, data) as viewer:
             right.length,
             Fn_l,
             Fn_r,  
-            F_l,
-            F_r,
+            z_wheel_l,
+            z_wheel_r,
+            P_l,
+            P_r,
             road.road,
             z_wheel_l,
             z_wheel_r,
             flag,
             jump,
-
+            b[0,0],
+            b[1,0],
+            b[2,0],
+            b[3,0],
         ]
         
 
@@ -372,22 +414,22 @@ with mj.viewer.launch_passive(model, data) as viewer:
         binary_data = struct.pack('<' + 'f' * len(send_list), *send_list)
         sock.sendto(binary_data + vofa_tail, (UDP_IP, UDP_PORT))
 
-        if U_out[0,0]>30:
-            U_out[0,0]=30
-        if U_out[0,0]<-30:
-            U_out[0,0]=-30
-        if U_out[1,0]>30:
-            U_out[1,0]=30
-        if U_out[1,0]<-30:  
-            U_out[1,0]=-30
-        if U_out[2,0]>30:
-            U_out[2,0]=30
-        if U_out[2,0]<-30:
-            U_out[2,0]=-30
-        if U_out[3,0]>30:
-            U_out[3,0]=30
-        if U_out[3,0]<-30:
-            U_out[3,0]=-30
+        if U_out[0,0]>35:
+            U_out[0,0]=35
+        if U_out[0,0]<-35:
+            U_out[0,0]=-35
+        if U_out[1,0]>35:
+            U_out[1,0]=35
+        if U_out[1,0]<-35:  
+            U_out[1,0]=-35
+        if U_out[2,0]>35:
+            U_out[2,0]=35
+        if U_out[2,0]<-35:
+            U_out[2,0]=-35
+        if U_out[3,0]>35:
+            U_out[3,0]=35
+        if U_out[3,0]<-35:
+            U_out[3,0]=-35
         if U_out[4,0]>5:
             U_out[4,0]=5
         if U_out[4,0]<-5:
