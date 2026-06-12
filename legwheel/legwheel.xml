@@ -16,16 +16,17 @@
         
         <light diffuse=".5 .5 .5" pos="0 0 3" dir="0 0 -1"/>
         <geom type="plane" size="200 200 0.1" rgba=".9 .9 .9 1" friction="1.0 0.001 0.0001" condim="6"/>
-        <body name="bigbox" pos="2.5 0 0.4">
+        <body name="bigbox" pos="4.5 0 0.4">
             <geom name="terrain_geom" type="hfield" hfield="my_terrain" pos="0 0 0" rgba="0.7 0.8 0.9 1" friction="0.8 0.005 0.0001"/>
         </body>                           
         <body name="gimbal" pos="0 0 0.331">
             <joint type="free"/>
             <site name="imu_site" pos="0 0 0"/> 
             <geom type="box" size="0.15 0.15 0.025" rgba="0.8 0.8 0.8 1" density="4500"/>
+            <!-- <geom type="box" size="0.025 0.025 0.025" pos="0.125 0 0.05" rgba="0.8 0.8 0.8 1" density="4500"/> -->
                 <geom type="cylinder" fromto="0.0 0.15 0 0.0 0.16 0" size="0.020 " rgba="0.6 0.6 0.6 1" />
                 <body name="leftleg1" pos="0.0547679943505 0.165 -0.0146750398573" >
-                    <joint name="leftjoint1" pos="-0.0547679943505 0 0.0146750398573" type="hinge" axis="0 1 0"  ref="15" damping="0.01"/>
+                    <joint name="leftjoint1" pos="-0.0547679943505 0 0.0146750398573" type="hinge" axis="0 1 0"  ref="15" damping="0.05"/>
                     <geom type="box" size="0.0642 0.005 0.0075" rgba="0.4 0.4 0.4 1" euler="0 15 0" density="7000"/>
                     <body name="leftleg2" pos="0.0 0.01 -0.0523939581187" >
                         <joint name="leftjoint2" pos="0.0547679943505 0 0.0377189182614" type="hinge" axis="0 1 0" damping="0.01"/>
@@ -37,8 +38,8 @@
                             <body name="leftleg4" pos="-0.1309969287096 -0.01 0.0455861742441" >
                                 <joint name="leftjoint4" pos="0.0466542174097 0 0.0125009598784" type="hinge" axis="0 1 0"  damping="0.01"/>
                                 <geom type="box" size="0.0558 0.005 0.0075" rgba="0.2 0.2 0.2 1" euler="0 -15 0" density="7000"/>
-                                <body name="leftleg5" pos="0.0843427112999 0.01 -0.1027190243719" >
-                                    <joint name="leftjoint5" pos="-0.1309969287096 0 0.0902180644934" type="hinge" axis="0 1 0"  damping="0.01"/>
+                                <body name="leftleg5" pos="0.0843427112999 0.01 -0.1027190243719">
+                                    <joint name="leftjoint5" pos="-0.1309969287096 0 0.0902180644934" type="hinge" range="-28 70" axis="0 1 0"  damping="0.01"/>
                                     <geom type="box" size="0.1665581481481 0.005 0.0075" rgba="0.2 0.2 0.2 1" euler="0 34.555326848126 0" density="7000"/>
                                     <site name="site_leftleg5" pos="-0.071847494811 0.005 0.0494816327711" size="0.01" rgba="1 0 0 1"/>
                                     <body name="leftwheel1" pos="0.1309969287096 -0.015 -0.0902180644934">
@@ -59,7 +60,7 @@
 
                 <geom type="cylinder" fromto="0.0 -0.15 0 0.0 -0.16 0" size="0.020 " rgba="0.6 0.6 0.6 1" />
                 <body name="rightleg1" pos="0.0547679943505 -0.165 -0.0146750398573" >
-                    <joint name="rightjoint1" pos="-0.0547679943505 0 0.0146750398573" type="hinge" axis="0 1 0" ref="15" damping="0.01"/>
+                    <joint name="rightjoint1" pos="-0.0547679943505 0 0.0146750398573" type="hinge" axis="0 1 0" ref="15" damping="0.05"/>
                     <geom type="box" size="0.0642 0.005 0.0075" rgba="0.4 0.4 0.4 1" euler="0 15 0" density="7000"/>
                     <body name="rightleg2" pos="0.0 -0.01 -0.0523939581187" >
                         <joint name="rightjoint2" pos="0.0547679943505 0 0.0377189182614" type="hinge" axis="0 1 0"  damping="0.01"/>
@@ -71,8 +72,8 @@
                             <body name="rightleg4" pos="-0.1309969287096 0.01 0.0455861742441" >
                                 <joint name="rightjoint4" pos="0.0466542174097 0 0.0125009598784" type="hinge" axis="0 1 0"  damping="0.01"/>
                                 <geom type="box" size="0.0558 0.005 0.0075" rgba="0.2 0.2 0.2 1" euler="0 -15 0" density="7000"/>
-                                <body name="rightleg5" pos="0.0843427112999 -0.01 -0.1027190243719" >
-                                    <joint name="rightjoint5" pos="-0.1309969287096 0 0.0902180644934" type="hinge" axis="0 1 0"  damping="0.01"/>
+                                <body name="rightleg5" pos="0.0843427112999 -0.01 -0.1027190243719">
+                                    <joint name="rightjoint5" pos="-0.1309969287096 0 0.0902180644934" type="hinge" range="-28 70" axis="0 1 0"  damping="0.01"/>
                                     <geom type="box" size="0.1665581481481 0.005 0.0075" rgba="0.2 0.2 0.2 1" euler="0 34.555326848126 0" density="7000"/>
                                     <site name="site_rightleg5" pos="-0.071847494811 -0.005 0.0494816327711" size="0.01" rgba="1 0 0 1"/>
                                     <body name="rightwheel1" pos="0.1309969287096 0.015 -0.0902180644934">

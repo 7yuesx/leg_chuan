@@ -69,6 +69,7 @@ right_length_pos = PID_control(kp=2000, ki=0.0, kd=0, targ_value=0)
 left_length_vel = PID_control(kp=100, ki=0, kd=0, targ_value=0)
 right_length_vel = PID_control(kp=100, ki=0, kd=0, targ_value=0)
 
+roll_pid = PID_control(kp=2000, ki=0, kd=1000, targ_value=0)
 
 # z_wheel_l_filter = LowPassFilter(alpha=0.8)
 # z_wheel_r_filter = LowPassFilter(alpha=0.8)
@@ -83,6 +84,8 @@ j=0
 
 jumped_l=0
 jumped_r=0
+
+state_mode = 0
 
 b = a = U_last = U = np.zeros((4,1))
 U_out = np.zeros((6,1))
@@ -144,30 +147,9 @@ with mj.viewer.launch_passive(model, data) as viewer:
         print(F_convergence)
         x_dot_target=cmd_v
         w_dot_target=cmd_omega_w
-        # if x_dot_target>2:
-        #     x_dot_target=2
-        # if x_dot_target<-2:
-        #     x_dot_target=-2
-        # if w_dot_target>2:
-        #     w_dot_target=2
-        # if w_dot_target<-2:
-        #     w_dot_target=-2
+
         x_target+=x_dot_target*dt
         w_target+=w_dot_target*dt
-
-
-        # U=U_last-F_convergence @ (np.block([[robot_state.update_state(left, right, length, motor,imu, dt)],
-        #                     [robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)],
-        #                     [robot_state.update_control(U_last)]]))
-
-        # U_d=Bd.T @ (I-Ad)@robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)
-        # U=U_d-F_convergence @ (np.block([[robot_state.update_state(left, right, length, motor,imu, dt)],
-        #                     [robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)]]))
-
-        # U[0,0]=0
-        # U[1,0]=0
-        # U[2,0]=0
-        # U[3,0]=0
 
         leg_length+=cmd_hight
 
@@ -176,46 +158,60 @@ with mj.viewer.launch_passive(model, data) as viewer:
         if leg_length>0.3:
             leg_length=0.3
 
-        # left_length_pos.position_pid(leg_length,left.length)
-        # right_length_pos.position_pid(leg_length,right.length)
+        max1=1500
+        max2=1000
+        max3=1000
+
+        jumped_r=0
+        jumped_l=0
+        G_m=109
+
+        left_target=0.0
+        right_target=0.0
+        
         left_length_pos.position_pid(leg_length,left.length)
         left_length_vel.position_pid(0,left.length_dot.Diff(left.length))
         right_length_pos.position_pid(leg_length,right.length)
         right_length_vel.position_pid(0,right.length_dot.Diff(right.length))
-        
+        roll_pid.position_pid(0,imu["euler"][0])
 
-        max1=2000
-        max2=1000
 
-        jumped_r=0
-        jumped_l=0
         if right.length<0.4 and jump and flag:
             jumped_r=5000
             max1=0
             max2=0
-        elif left.length>=0.3 and jump:
+            
+        elif left.length>=0.35 and jump:
             jumped_r=0
             flag=0
             max2=0
-            leg_length=0.12
-        elif left.length<=0.2 and jump:
+            max3=0
+            G_m=0
+            leg_length=0.1
+        elif left.length<=0.11 and jump:
             jumped_r=0
             flag=0
-            
+            max3=0
+            leg_length=0.12
 
         if left.length<0.4 and jump and flag:
             jumped_l=5000
             max1=0
             max2=0
-        elif left.length>=0.3 and jump:
+            # leg_length=0.4
+        elif left.length>=0.35 and jump:
             jumped_l=0
             flag=0
+            G_m=0
             max2=0
-            leg_length=0.12
-        elif left.length<=0.2 and jump:
+            max3=0
+            leg_length=0.1
+
+        elif left.length<=0.11 and jump:
             jumped_r=0
             flag=0
-            
+            max3=0
+            leg_length=0.12
 
         if left_length_pos.output>max1:
             left_length_pos.output=max1
@@ -235,51 +231,31 @@ with mj.viewer.launch_passive(model, data) as viewer:
         if right_length_vel.output<-max2:
             right_length_vel.output=-max2
         
+        if roll_pid.output>max3:
+            roll_pid.output=max3
+        if roll_pid.output<-max3:
+            roll_pid.output=-max3
 
-        F_l=left_length_vel.output+left_length_pos.output+109*cos(robot_state.x[3,0])+jumped_l
-        
-        F_r=right_length_vel.output+right_length_pos.output+109*cos(robot_state.x[4,0])+jumped_r
-
-
-        # left.vmc(0, U[0,0], motor, length)
-        # right.vmc(0, U[1,0], motor, length)
-
-
-               # U_out = np.block([[left.t_front],[right.t_front],[left.t_back],[right.t_back],[U[2,0]],[U[3,0]]])
-        
-        P_l=F_l*cos(robot_state.x[3,0])+U[0,0]*sin(robot_state.x[3,0])/left.length
-        P_r=F_r*cos(robot_state.x[4,0])+U[1,0]*sin(robot_state.x[4,0])/right.length
+        z_body=sensor.body_acc(imu)
+        road.filter(z_body,motor,length,dt)    
 
         m_l=m_r=0.353429173529
         g=9.81
 
-        w=imu["quat"][0]
-        x=imu["quat"][1]
-        y=imu["quat"][2]
-        z=imu["quat"][3]
-        
-        R=np.array([[1-2*y**2-2*z**2, 2*x*y-2*z*w, 2*x*z+2*y*w],
-                   [2*x*y+2*z*w, 1-2*x**2-2*z**2, 2*y*z-2*x*w],
-                   [2*x*z-2*y*w, 2*y*z+2*x*w, 1-2*x**2-2*y**2]])    
-        S=np.array([imu["acc"][0],imu["acc"][1],imu["acc"][2]])
-        z_body=R@S-np.array([0,0,9.81])
+        F_l=left_length_vel.output+roll_pid.output+left_length_pos.output+G_m*cos(robot_state.x[3,0])+jumped_l
+        F_r=right_length_vel.output-roll_pid.output+right_length_pos.output+G_m*cos(robot_state.x[4,0])+jumped_r
+
+        P_l=F_l*cos(robot_state.x[3,0])+U[0,0]*sin(robot_state.x[3,0])/left.length
+        P_r=F_r*cos(robot_state.x[4,0])+U[1,0]*sin(robot_state.x[4,0])/right.length
+
         z_wheel_l=z_body[2]-left.length_ddot.Diff(left.length_dot.diff_num)*cos(left.theta)+2*left.length_dot.diff_num*left.theta_dot.diff_num*sin(left.theta)+left.length*left.theta_ddot.Diff(left.theta_dot.diff_num)*sin(left.theta)+left.length*left.theta_dot.diff_num**2*cos(left.theta)
         z_wheel_r=z_body[2]-right.length_ddot.Diff(right.length_dot.diff_num)*cos(right.theta)+2*right.length_dot.diff_num*right.theta_dot.diff_num*sin(right.theta)+right.length*right.theta_ddot.Diff(right.theta_dot.diff_num)*sin(right.theta)+right.length*right.theta_dot.diff_num**2*cos(right.theta)
-
-        # if(z_wheel_l<):
-            
-        # if(z_wheel_r<0):
-
-        # z_wheel_l=z_wheel_l_filter.update(z_wheel_l)
-        # z_wheel_r=z_wheel_r_filter.update(z_wheel_r)
 
         Fn_l=P_l+m_l*g+z_wheel_l*m_l    
         Fn_r=P_r+m_r*g+z_wheel_r*m_r
 
 
-
-
-        if(Fn_l<20):
+        if(Fn_l<20) :
             F_c[0,0]=0
             F_c[0,1]=0
             F_c[0,2]=0
@@ -302,9 +278,7 @@ with mj.viewer.launch_passive(model, data) as viewer:
             F_c[2,8]=0
             F_c[2,9]=0
 
-            
-            # U[2,0]=0
-        if(Fn_r<20): 
+        if(Fn_r<20) : 
             F_c[1,0]=0
             F_c[1,1]=0
             F_c[1,2]=0
@@ -327,11 +301,6 @@ with mj.viewer.launch_passive(model, data) as viewer:
             F_c[3,8]=0
             F_c[3,9]=0
 
-           
-            # U[3,0]=0
-
-        road.filter(z_body,motor,length,dt)    
-
         # U=U_last-F_convergence @ (np.block([[robot_state.update_state(left, right, length, motor,imu, road)],
         #                     [robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)],
         #                     [robot_state.update_control(U_last)]]))
@@ -340,23 +309,34 @@ with mj.viewer.launch_passive(model, data) as viewer:
         # U=U_d-F_convergence @ (np.block([[robot_state.update_state(left, right, length, motor, imu, road)],
         #                     [robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)]]))
 
-
-        U=-F_c @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)) + b
+        U=-F_c @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target, left_target, right_target))
     
 
-      
-        left.vmc(F_l, U[0,0], motor, length)
-        right.vmc(F_r, U[1,0], motor, length)
+
+        left.vmc(F_l+12, U[0,0], motor, length)
+        right.vmc(F_r+12, U[1,0], motor, length)
+
 
         U_out = np.block([[left.t_front],[right.t_front],[left.t_back],[right.t_back],[U[2,0]],[U[3,0]]])
 
-        if abs(imu["euler"][0])>1.22 or abs(imu["euler"][1])>1.22:
+        if abs(imu["euler"][0])>1.0 or abs(imu["euler"][1])>1.0 :
             U_out[0,0]=0
             U_out[1,0]=0
             U_out[2,0]=0
             U_out[3,0]=0
             U_out[4,0]=0
             U_out[5,0]=0
+            
+        # if (abs(robot_state.x[3,0])>1.5 or abs(robot_state.x[4,0])>1.5) :
+        #     U_out[0,0]=0
+        #     U_out[1,0]=0
+        #     U_out[2,0]=0
+        #     U_out[3,0]=0
+        #     U_out[4,0]=0
+        #     U_out[5,0]=0  
+      
+
+        
 
         send_list = [
             robot_state.x[0,0],
@@ -379,32 +359,10 @@ with mj.viewer.launch_passive(model, data) as viewer:
             robot_state.x_target[7,0],
             robot_state.x_target[8,0],
             robot_state.x_target[9,0],
-            U[0,0],
-            U[1,0],
-            U_out[0,0],
-            U_out[1,0],
-            U_out[2,0],         
-            U_out[3,0],
-            U_out[4,0],
-            U_out[5,0],
-            imu["acc"][2],
             left.length,
             right.length,
             Fn_l,
             Fn_r,  
-            z_wheel_l,
-            z_wheel_r,
-            P_l,
-            P_r,
-            road.road,
-            z_wheel_l,
-            z_wheel_r,
-            flag,
-            jump,
-            b[0,0],
-            b[1,0],
-            b[2,0],
-            b[3,0],
         ]
         
 

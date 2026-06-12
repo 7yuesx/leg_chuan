@@ -105,6 +105,18 @@ class RobotSensor:
         yaw = np.arctan2(siny_cosp, cosy_cosp)
 
         return np.array([roll, pitch, yaw])
+    def body_acc(self, imu):
+        w=imu["quat"][0]
+        x=imu["quat"][1]
+        y=imu["quat"][2]
+        z=imu["quat"][3]
+        
+        R=np.array([[1-2*y**2-2*z**2, 2*x*y-2*z*w, 2*x*z+2*y*w],
+                   [2*x*y+2*z*w, 1-2*x**2-2*z**2, 2*y*z-2*x*w],
+                   [2*x*z-2*y*w, 2*y*z+2*x*w, 1-2*x**2-2*y**2]])    
+        S=np.array([imu["acc"][0],imu["acc"][1],imu["acc"][2]])
+        z_body=R@S-np.array([0,0,9.81])
+        return z_body
 ######################
 
 class Leg:
@@ -222,13 +234,13 @@ class State:
         self.x[8,0] = Leg_left.theta_dot.diff_num
         self.x[9,0] = Leg_right.theta_dot.diff_num
         return self.x
-    def update_target(self, x_target, w_target, x_dot_target, w_dot_target):
+    def update_target(self, x_target, w_target, x_dot_target, w_dot_target, left_target, right_target):
 
         self.x_target[0,0] = x_target
         self.x_target[1,0] = w_target
         self.x_target[2,0] = 0.0
-        self.x_target[3,0] = 0.0
-        self.x_target[4,0] = 0.0
+        self.x_target[3,0] = left_target
+        self.x_target[4,0] = right_target
         self.x_target[5,0] = x_dot_target
         self.x_target[6,0] = w_dot_target
         self.x_target[7,0] = 0.0

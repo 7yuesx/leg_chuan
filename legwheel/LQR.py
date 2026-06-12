@@ -18,11 +18,11 @@ F = np.zeros((n, 4, 24))
 
 q_diag = np.array([
     50,    # x: 100
-    10,     # w: 10
+    20,     # w: 10
     8000,   # theta: 5000 (身体俯仰是最重要的！)
     6000,    # theta_l: 500
     6000,    # theta_r: 500
-    5,     # x_dot
+    1,     # x_dot
     1,      # w_dot
     1,    # theta_dot
     1,     # theta_dot_l
