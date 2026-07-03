@@ -79,7 +79,7 @@ w_target=0
 x_dot_target=0
 w_dot_target=0
 
-leg_length=0.12
+leg_length=0.245
 j=0
 
 jumped_l=0
@@ -181,25 +181,25 @@ with mj.viewer.launch_passive(model, data) as viewer:
             max1=0
             max2=0
             
-        elif left.length>=0.35 and jump:
+        elif left.length>=0.4 and jump:
             jumped_r=0
             flag=0
             max2=0
             max3=0
             G_m=0
             leg_length=0.1
-        elif left.length<=0.11 and jump:
+        elif left.length<=0.1 and jump:
             jumped_r=0
             flag=0
             max3=0
-            leg_length=0.12
+            leg_length=0.1
 
         if left.length<0.4 and jump and flag:
             jumped_l=5000
             max1=0
             max2=0
             # leg_length=0.4
-        elif left.length>=0.35 and jump:
+        elif left.length>=0.4 and jump:
             jumped_l=0
             flag=0
             G_m=0
@@ -207,11 +207,11 @@ with mj.viewer.launch_passive(model, data) as viewer:
             max3=0
             leg_length=0.1
 
-        elif left.length<=0.11 and jump:
+        elif left.length<=0.1 and jump:
             jumped_r=0
             flag=0
             max3=0
-            leg_length=0.12
+            leg_length=0.1
 
         if left_length_pos.output>max1:
             left_length_pos.output=max1
@@ -372,22 +372,22 @@ with mj.viewer.launch_passive(model, data) as viewer:
         binary_data = struct.pack('<' + 'f' * len(send_list), *send_list)
         sock.sendto(binary_data + vofa_tail, (UDP_IP, UDP_PORT))
 
-        if U_out[0,0]>35:
-            U_out[0,0]=35
-        if U_out[0,0]<-35:
-            U_out[0,0]=-35
-        if U_out[1,0]>35:
-            U_out[1,0]=35
-        if U_out[1,0]<-35:  
-            U_out[1,0]=-35
-        if U_out[2,0]>35:
-            U_out[2,0]=35
-        if U_out[2,0]<-35:
-            U_out[2,0]=-35
-        if U_out[3,0]>35:
-            U_out[3,0]=35
-        if U_out[3,0]<-35:
-            U_out[3,0]=-35
+        if U_out[0,0]>40:
+            U_out[0,0]=40
+        if U_out[0,0]<-40:
+            U_out[0,0]=-40
+        if U_out[1,0]>40:
+            U_out[1,0]=40
+        if U_out[1,0]<-40:  
+            U_out[1,0]=-40
+        if U_out[2,0]>40:
+            U_out[2,0]=40
+        if U_out[2,0]<-40:
+            U_out[2,0]=-40
+        if U_out[3,0]>40:
+            U_out[3,0]=40
+        if U_out[3,0]<-40:
+            U_out[3,0]=-40
         if U_out[4,0]>5:
             U_out[4,0]=5
         if U_out[4,0]<-5:
