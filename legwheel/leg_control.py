@@ -9,7 +9,7 @@ import socket
 import struct
 from scipy.spatial.transform import Rotation as R
 
-from user_class import RobotSensor, Leg, State, LowPassFilter
+from user_class import RobotSensor, Leg, State, Change_length_fit
 from mymath import PID_control
 from pynput import keyboard
 from kalman import Kalman
@@ -66,8 +66,8 @@ right=Leg("right", dt)
 
 left_length_pos = PID_control(kp=2000, ki=0.0, kd=0, targ_value=0)
 right_length_pos = PID_control(kp=2000, ki=0.0, kd=0, targ_value=0)
-left_length_vel = PID_control(kp=100, ki=0, kd=0, targ_value=0)
-right_length_vel = PID_control(kp=100, ki=0, kd=0, targ_value=0)
+left_length_vel = PID_control(kp=120, ki=0, kd=0, targ_value=0)
+right_length_vel = PID_control(kp=120, ki=0, kd=0, targ_value=0)
 
 roll_pid = PID_control(kp=2000, ki=0, kd=1000, targ_value=0)
 
@@ -79,13 +79,23 @@ w_target=0
 x_dot_target=0
 w_dot_target=0
 
-leg_length=0.245
+leg_length=0.21
 j=0
 
 jumped_l=0
 jumped_r=0
 
 state_mode = 0
+
+k_coeff=np.array([[[25.6845,-32.9517,17.6266,-5.2228,0.9282], [1.4340,-1.8905,1.1834,-0.5364,-0.4896], [923.8710,-1092.6,502.6034,-110.6934,-57.0662], [364.5066,-420.9464,197.7163,-61.6707,29.2380], [347.2482,-494.2305,293.6293,-84.8201,-2.8636], [172.8698,-205.0662,97.0404,-23.7418,3.2421], [1.7838,-2.2798,1.3710,-0.6637,-0.5402], [47.8281,-56.0437,25.4980,-5.5514,-2.8019], [11.5037,-13.7858,6.6572,-0.6661,0.6363], [0.2029,0.5962,-0.7440,-0.8760,-0.0851]],
+                  [[25.6845,-32.9517,17.6266,-5.2228,0.9282], [-1.4340,1.8905,-1.1834,0.5364,0.4896], [923.8710,-1092.6,502.6034,-110.6934,-57.0662], [347.2482,-494.2305,293.6293,-84.8201,-2.8636], [364.5066,-420.9464,197.7163,-61.6707,29.2380], [172.8698,-205.0662,97.0404,-23.7418,3.2421], [-1.7838,2.2798,-1.3710,0.6637,0.5402], [47.8281,-56.0437,25.4980,-5.5514,-2.8019], [0.2029,0.5962,-0.7440,-0.8760,-0.0851], [11.5037,-13.7858,6.6572,-0.6661,0.6363]],
+                  [[16.7613,-26.1043,16.5385,-5.4239,-1.2086], [-1.1272,1.3905,-0.8866,0.5448,-0.5014], [-1576.4,1993.5,-1024.5,277.0579,-41.4832], [275.1361,-472.8729,338.1066,-132.4359,-34.0195], [505.5580,-622.1571,292.9324,-61.5938,-2.6412], [-129.8865,129.2661,-43.8260,4.2654,-4.9732], [-1.0609,1.3058,-0.8384,0.5435,-0.5532], [-118.4951,145.3071,-71.6176,18.3392,-2.6412],[-19.9594,22.6431,-9.3670,-3.1116,-0.7461],[-9.9819,9.1353,-2.4167,-2.4995,-0.0813]],
+                  [[16.7613,-26.1043,16.5385,-5.4239,-1.2086], [1.1272,-1.3905,0.8866,-0.5448,0.5014], [-1576.4,1993.5,-1024.5,277.0579,-41.4832], [505.5580,-622.1571,292.9324,-61.5938,-2.6412], [275.1361,-472.8729,338.1066,-132.4359,-34.0195], [-129.8865,129.2661,-43.8260,4.2654,-4.9732], [1.0609,-1.3058,0.8384,-0.5435,0.5532], [-118.4951,145.3071,-71.6176,18.3392,-2.6412],[-9.9819,9.1353,-2.4167,-2.4995,-0.0813],[-19.9594,22.6431,-9.3670,-3.1116,-0.7461]]])
+theta_coeff=np.array([-90.3137,94.5175,-35.6182,3.7520,0.6523])
+e1_coeff=np.array([7242.0, -7790.1, 3139.9, -571.7475, 41.9684])
+e2_coeff=np.array([5.2420, -5.6453, 2.2743, -0.4113, 0.029])
+e3_coeff=np.array([-233.8069, 251.4137, -101.2784, 18.4236, -1.3489])
+change_length=Change_length_fit(np.zeros((4, 10)),k_coeff,theta_coeff,e1_coeff,e2_coeff,e3_coeff)
 
 b = a = U_last = U = np.zeros((4,1))
 U_out = np.zeros((6,1))
@@ -109,7 +119,7 @@ with mj.viewer.launch_passive(model, data) as viewer:
             "right_back_big": 0.21,
             "right_front_small": 0.2462962962962,
             "right_back_small": 0.2462962962962,
-            "right_wheel":0.05,
+            "right_wheel":0.055,
             
             "R":0.165,
         }
@@ -142,9 +152,21 @@ with mj.viewer.launch_passive(model, data) as viewer:
         left.forward(motor, imu, length, robot_state.x[2,0])
         right.forward(motor, imu, length, robot_state.x[2,0])
 
-        F_c=F_convergence.copy()
-        print(F_c)
-        print(F_convergence)
+        K=change_length.get_K((left.length+right.length)/2)
+        theta_target=left_target=right_target=0
+        e1=change_length.get_e1((left.length+right.length)/2)
+        e2=change_length.get_e2((left.length+right.length)/2)
+        e3=change_length.get_e3((left.length+right.length)/2)
+        # left_target=right_target=change_length.get_theta_target((left.length+right.length)/2)
+
+        # F_c=F_convergence.copy()
+        F_c=K
+
+        # print('K:')
+        # print(K)
+        # print('F_convergence:')
+        # print(F_convergence)
+
         x_dot_target=cmd_v
         w_dot_target=cmd_omega_w
 
@@ -155,8 +177,8 @@ with mj.viewer.launch_passive(model, data) as viewer:
 
         if leg_length<0.12:
             leg_length=0.12
-        if leg_length>0.3:
-            leg_length=0.3
+        if leg_length>0.35:
+            leg_length=0.35
 
         max1=1500
         max2=1000
@@ -164,10 +186,10 @@ with mj.viewer.launch_passive(model, data) as viewer:
 
         jumped_r=0
         jumped_l=0
-        G_m=109
+        G_m=104
 
-        left_target=0.0
-        right_target=0.0
+        # left_target=0.0
+        # right_target=0.0
         
         left_length_pos.position_pid(leg_length,left.length)
         left_length_vel.position_pid(0,left.length_dot.Diff(left.length))
@@ -309,9 +331,10 @@ with mj.viewer.launch_passive(model, data) as viewer:
         # U=U_d-F_convergence @ (np.block([[robot_state.update_state(left, right, length, motor, imu, road)],
         #                     [robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)]]))
 
-        U=-F_c @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target, left_target, right_target))
+        U=-F_c @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target+e1, w_target, x_dot_target, w_dot_target, theta_target, left_target, right_target))
+        # U=-K @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target, theta_target, left_target, right_target))
     
-
+        print(e1,e2,e3,(left.length+right.length)/2)
 
         left.vmc(F_l+12, U[0,0], motor, length)
         right.vmc(F_r+12, U[1,0], motor, length)

@@ -1,14 +1,16 @@
 import scipy.io
 import numpy as np
+import os
+print(os.path.getmtime('sys_matrices.mat'))
 from scipy.signal import cont2discrete
 # 加载文件
 data = scipy.io.loadmat('sys_matrices.mat')
-
+print(data.keys())
 # 提取矩阵 (注意：loadmat 返回的是字典)
 
 
 n = 100000
-
+n=1
 z = np.zeros((n, 24, 1))
 u = np.zeros((n, 4, 1))
 u_best = np.zeros((n, 4, 1))
@@ -17,11 +19,11 @@ P = np.zeros((n, 24, 24))
 F = np.zeros((n, 4, 24))
 
 q_diag = np.array([
-    50,    # x: 100
-    20,     # w: 10
-    8000,   # theta: 5000 (身体俯仰是最重要的！)
-    6000,    # theta_l: 500
-    6000,    # theta_r: 500
+    10,    # x: 100
+    1,     # w: 10
+    10000,   # theta: 5000 (身体俯仰是最重要的！)
+    4000,    # theta_l: 500
+    4000,    # theta_r: 500
     1,     # x_dot
     1,      # w_dot
     1,    # theta_dot
@@ -96,9 +98,9 @@ Ca = np.block([np.eye(10),-np.eye(10),np.zeros((10,4))])
 
 # Ca = np.block([np.eye(10),-np.eye(10)])
 
-print(Aa)
-print(Ba)
-print(Ca)
+print(A)
+print(Ad)
+
 
 Sa = Ca.T @ S @ Ca
 Qa = Ca.T @ Q @ Ca
@@ -162,7 +164,7 @@ for i in range(0,n):
       F_convergence= np.linalg.inv(Bd.T @ P_steady @ Bd + R) @ (Bd.T @ P_steady @ Ad)
       P_steady = (Ad - Bd @ F_convergence).T @ P_steady @ (Ad - Bd @ F_convergence) + F_convergence.T @ R @ F_convergence + Q
 
-
+print('F_convergence:')
 print(F_convergence)
 
 

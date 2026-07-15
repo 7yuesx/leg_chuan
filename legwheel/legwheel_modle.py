@@ -2,8 +2,8 @@ import mujoco as mj
 import mujoco.viewer as viewer
 import numpy as np
 
-Model = mj.MjModel.from_xml_path("legwheel.xml")
-Data = mj.MjData(Model)
+model = mj.MjModel.from_xml_path("legwheel.xml")
+data = mj.MjData(model)
 
 def save_model_high_precision(model, filename):
     with open(filename, "w") as f:
@@ -43,7 +43,7 @@ def save_model_high_precision(model, filename):
             f.write(f"  Pos:  {np.array2string(model.geom_pos[i], precision=12, separator=', ')}\n")
             f.write("\n")
 
-save_model_high_precision(Model, "high_res_model.txt")
+save_model_high_precision(model, "high_res_model.txt")
 
 
 # def read_mass(body_name):
@@ -117,4 +117,4 @@ save_model_high_precision(Model, "high_res_model.txt")
 # m_wl = User_Body("wheel_weld_l", m_w1.mass+m_w3.mass, [m_w1.inertia[0]+m_w3.inertia[0], m_w1.inertia[1]+m_w3.inertia[1], m_w1.inertia[2]+m_w3.inertia[2]])
 # m_wr = User_Body("wheel_weld_r", m_w2.mass+m_w4.mass, [m_w2.inertia[0]+m_w4.inertia[0], m_w2.inertia[1]+m_w4.inertia[1], m_w2.inertia[2]+m_w4.inertia[2]])
 
-viewer.launch(Model, Data)
+viewer.launch(model, data)

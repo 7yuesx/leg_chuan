@@ -234,11 +234,11 @@ class State:
         self.x[8,0] = Leg_left.theta_dot.diff_num
         self.x[9,0] = Leg_right.theta_dot.diff_num
         return self.x
-    def update_target(self, x_target, w_target, x_dot_target, w_dot_target, left_target, right_target):
+    def update_target(self, x_target, w_target, x_dot_target, w_dot_target, theta_target, left_target, right_target):
 
         self.x_target[0,0] = x_target
         self.x_target[1,0] = w_target
-        self.x_target[2,0] = 0.0
+        self.x_target[2,0] = theta_target
         self.x_target[3,0] = left_target
         self.x_target[4,0] = right_target
         self.x_target[5,0] = x_dot_target
@@ -292,3 +292,34 @@ class LowPassFilter:
     def reset(self):
         """重置滤波器"""
         self.last_output = None
+
+class Change_length_fit:
+    def __init__(self, K=np.zeros((4, 10)),K_coeff=np.zeros((4, 10, 5)),theta_coeff=np.zeros((4)),e1_coeff=np.zeros((5)),e2_coeff=np.zeros((5)),e3_coeff=np.zeros((5))):
+        self.K = K
+        self.K_coeff = K_coeff
+        self.theta_coeff = theta_coeff
+        self.e1 = e1_coeff
+        self.e2 = e2_coeff
+        self.e3 = e3_coeff
+    def get_K(self, leg_length):
+        # Example implementation - replace with actual logic
+        for i in range(4):
+            for j in range(10):
+                self.K[i, j] = self.K_coeff[i, j, 0] * leg_length**4    + self.K_coeff[i, j, 1] * leg_length**3    + self.K_coeff[i, j, 2] * leg_length**2    + self.K_coeff[i, j, 3] * leg_length    + self.K_coeff[i, j, 4]
+        return self.K
+    def get_theta_target(self, leg_length):
+        # Example implementation - replace with actual logic
+        theta_target = self.theta_coeff[0] * leg_length**4+ self.theta_coeff[1] * leg_length**3+ self.theta_coeff[2] * leg_length**2+ self.theta_coeff[3] * leg_length+ self.theta_coeff[4]
+        return theta_target
+    def get_e1(self, leg_length):
+        # Example implementation - replace with actual logic
+        e1 = self.e1[0] * leg_length**4+ self.e1[1] * leg_length**3+ self.e1[2] * leg_length**2+ self.e1[3] * leg_length+ self.e1[4]
+        return e1
+    def get_e2(self, leg_length):
+        # Example implementation - replace with actual logic
+        e2 = self.e2[0] * leg_length**4+ self.e2[1] * leg_length**3+ self.e2[2] * leg_length**2+ self.e2[3] * leg_length+ self.e2[4]
+        return e2
+    def get_e3(self, leg_length):
+        # Example implementation - replace with actual logic
+        e3 = self.e3[0] * leg_length**4+ self.e3[1] * leg_length**3+ self.e3[2] * leg_length**2+ self.e3[3] * leg_length+ self.e3[4]
+        return e3
