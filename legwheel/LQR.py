@@ -10,7 +10,7 @@ print(data.keys())
 
 
 n = 100000
-n=1
+# n=1
 z = np.zeros((n, 24, 1))
 u = np.zeros((n, 4, 1))
 u_best = np.zeros((n, 4, 1))
