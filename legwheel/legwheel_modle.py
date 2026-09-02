@@ -2,7 +2,7 @@ import mujoco as mj
 import mujoco.viewer as viewer
 import numpy as np
 
-model = mj.MjModel.from_xml_path("legwheel.xml")
+model = mj.MjModel.from_xml_path("mjmodel.xml")
 data = mj.MjData(model)
 
 def save_model_high_precision(model, filename):

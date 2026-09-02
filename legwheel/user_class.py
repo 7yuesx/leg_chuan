@@ -323,3 +323,173 @@ class Change_length_fit:
         # Example implementation - replace with actual logic
         e3 = self.e3[0] * leg_length**4+ self.e3[1] * leg_length**3+ self.e3[2] * leg_length**2+ self.e3[3] * leg_length+ self.e3[4]
         return e3
+    
+class Mpc:
+    def __init__(self,dt,K_coeff,P_coeff,S_coeff,A_coeff,B_coeff,AmBK_coeff,Le_coeff,theta_l_coeff,theta_r_coeff,N,rho,state,input):
+
+        self.N = N
+        self.state_num = state
+        self.input_num = input
+        self.rho = rho
+
+        self.K_coeff = K_coeff
+        self.P_coeff = P_coeff
+        self.S_coeff = S_coeff
+        self.A_coeff = A_coeff
+        self.B_coeff = B_coeff
+        self.AmBK_T_coeff = AmBK_coeff
+        self.Le_coeff = Le_coeff
+
+        self.theta_l_coeff = theta_l_coeff
+        self.theta_r_coeff = theta_r_coeff
+
+        self.K = np.zeros((input,state))
+        self.d = np.zeros((input,1))
+
+        self.A = np.zeros((state,state))
+        self.B = np.zeros((state,input))
+
+        self.AmBK_T = np.zeros((state,state))
+
+        self.Q = np.array([[10,0,0,0,0,0,0,0,0,0],
+                           [0,1,0,0,0,0,0,0,0,0],
+                           [0,0,5000,0,0,0,0,0,0,0],
+                           [0,0,0,4000,0,0,0,0,0,0],
+                           [0,0,0,0,4000,0,0,0,0,0],
+                           [0,0,0,0,0,1,0,0,0,0],
+                           [0,0,0,0,0,0,1,0,0,0],
+                           [0,0,0,0,0,0,0,1,0,0],
+                           [0,0,0,0,0,0,0,0,1,0],
+                           [0,0,0,0,0,0,0,0,0,1]])
+        
+        self.R = np.array([[1,0,0,0],
+                           [0,1,0,0],
+                           [0,0,1,0],
+                           [0,0,0,1]])
+
+        self.P = np.zeros((state,state))
+
+        self.S = np.zeros((input,input))
+
+
+        self.z = np.zeros((N,input,1))
+        self.e = np.zeros((N+1,state,1))
+        self.lambda_ = np.zeros((N,input,1))
+        # self.H = np.zeros((state*(N+1)+input*N,state*(N+1)+input*N))
+        self.min=np.vstack([-50.0,-50.0,-5.0,-5.0])
+        self.max=np.vstack([50.0,50.0,5.0,5.0])
+
+        self.X = np.zeros((state+input,1))
+        self.y = np.zeros((state,1))
+        self.u = np.zeros((input,1))
+        self.C = np.block([np.eye(state), np.zeros((state,input))])  # 10x14
+        self.Le = np.zeros((state+input,state))
+    def leso(self, x, u):
+        self.y[0:10,0] = x[0:10,0]
+        self.u = u
+        Ae=np.block([[self.A,self.B],
+                     [np.zeros((4,10)),np.eye(4)]]) 
+        Be=np.vstack([self.B,np.zeros((4,4))])
+
+        self.X = Ae@self.X+Be@self.u+self.Le@(self.y-self.C@self.X)
+
+        return self.X[10:14,0:1]
+        pass
+
+    def get_matrix(self,leg_lenth_l,leg_lenth_r):
+        x = leg_lenth_l
+        y = leg_lenth_r
+        # 展平系数为 (40, 15) 矩阵
+        coeffs_flat_k = self.K_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_p = self.P_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_a = self.A_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_b = self.B_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_s = self.S_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_ambk_t = self.AmBK_T_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_theta_l = self.theta_l_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_theta_r = self.theta_r_coeff.reshape(-1, 10)
+        coeffs_flat_le = self.Le_coeff.reshape(-1, 10)  # 视图，无拷贝
+        
+        # 构造特征向量 [1, x, y, x², x*y, y²]
+        x2 = x * x
+        y2 = y * y
+        xy = x * y
+        x3 = x * x2
+        x2y = x2 * y
+        xy2 = x * y2
+        y3 = y * y2
+        x4 = x * x3
+        x3y = x3 * y
+        x2y2 = x2 * y2
+        xy3 = x * y3
+        y4 = y * y3
+        features = np.array([1.0, x, y, x2, xy, y2, x3, x2y, xy2, y3], dtype=np.float32)#, x4, x3y, x2y2, xy3, y4
+
+        # 矩阵乘法：40×6 与 6×1 得到 40×1，再 reshape 为 4×10
+        # 使用 @ 运算符（或 np.dot）在 C 级完成，极快
+        self.K[:, :] = (coeffs_flat_k @ features).reshape(4, 10)
+        self.P[:, :] = (coeffs_flat_p @ features).reshape(10, 10)
+        self.A[:, :] = (coeffs_flat_a @ features).reshape(10, 10)
+        self.B[:, :] = (coeffs_flat_b @ features).reshape(10, 4)
+        self.S[:, :] = (coeffs_flat_s @ features).reshape(4, 4)
+        self.AmBK_T[:, :] = (coeffs_flat_ambk_t @ features).reshape(10, 10)
+        theta_l = (coeffs_flat_theta_l @ features).reshape(1, 1)
+        theta_r = (coeffs_flat_theta_r @ features).reshape(1, 1)
+        self.Le[:, :] = (coeffs_flat_le @ features).reshape(14, 10)
+        
+
+        return theta_l, theta_r, self.B,self.K
+    
+    def update_forward(self, state, target,leso_d_hat):
+        error=np.zeros((self.N+1,self.state_num,1))
+        u=np.zeros((self.N,self.input_num,1))
+        error[0] = state - target
+        hat = leso_d_hat
+      
+        for i in range(self.N):
+            # u[i] = np.clip(-self.K @ error[i], self.min, self.max) 
+            # error[i+1] = self.A @ error[i] + self.B @ (u[i] - hat)  
+            u[i] = self.K @ error[i]
+            error[i+1] = self.AmBK_T.T@ error[i]   
+
+        self.z = u
+        self.e = error
+        return self.z
+    
+    def Admm(self,leso_d_hat,Fn_l,Fn_r):
+        u=np.zeros((self.N,self.input_num,1))
+        hat = leso_d_hat
+       
+        s = np.zeros((self.N+1,self.state_num,1))
+        
+        for j in range(20):
+            s[self.N] = self.P @ self.e[self.N]
+
+            for i in range(self.N):
+                s[self.N - i - 1] =  self.AmBK_T @  s[self.N - i] + self.K.T @ (self.lambda_[self.N - i - 1] - self.rho * self.z[self.N - i - 1] )
+#self.AmBK_T
+          
+                        
+            # for i in range(self.N):
+                u[i] = self.K @ self.e[i] - self.S @ self.B.T @ s[i] - self.S @ (self.lambda_[i]- self.rho * self.z[i]) 
+                self.e[i+1] = self.A @ self.e[i] + self.B @ (u[i] - hat)
+                self.z[i]=np.clip(u[i]+self.lambda_[i]/self.rho,self.min,self.max)
+                                
+            # for i in range(self.N):
+                            
+            # for i in range(self.N):
+                self.lambda_[i]=self.lambda_[i]+self.rho * (u[i]-self.z[i])
+                
+        if(Fn_l<20 or Fn_r<20 ):
+                       s[:,0,0] = 0
+                       s[:,1,0] = 0
+                       s[:,2,0] = 0
+                       s[:,3,0] = 0
+                       s[:,4,0] = 0
+                       s[:,5,0] = 0
+                       s[:,6,0] = 0
+                       s[:,7,0] = 0
+                       s[:,8,0] = 0
+                       s[:,9,0] = 0
+                       self.S[:]=0
+        return self.z
