@@ -13,7 +13,7 @@ from user_class import RobotSensor, Leg, State, Mpc
 from mymath import PID_control
 from pynput import keyboard
 from kalman import Kalman
-from coeff import A_coeff, B_coeff, K_coeff, P_coeff, S_coeff, AmBK_T_coeff, Le_coeff, theta_l_coeff, theta_r_coeff
+from coeff import A_coeff, B_coeff, K_coeff, P_coeff, Quu_inv_coeff, AmBK_T_coeff,f_coeff,APf_coeff,BPf_coeff ,Le_coeff,theta_coeff, theta_l_coeff, theta_r_coeff
 
 # 控制状态
 cmd_v = 0.0
@@ -72,7 +72,7 @@ right_length_vel = PID_control(kp=125, ki=0, kd=0, targ_value=0)
 
 roll_pid = PID_control(kp=2000, ki=0, kd=1000, targ_value=0)
 
-robot_mpc = Mpc(dt, K_coeff, P_coeff, S_coeff, A_coeff, B_coeff, AmBK_T_coeff,Le_coeff, theta_l_coeff, theta_r_coeff, N=100, rho=1, state=10, input=4)
+robot_mpc = Mpc(dt, K_coeff, P_coeff, Quu_inv_coeff, A_coeff, B_coeff, AmBK_T_coeff,f_coeff,APf_coeff,BPf_coeff,Le_coeff,theta_coeff, theta_l_coeff, theta_r_coeff, N=10, rho=1, state=10, input=4)
 times = 1
 # z_wheel_l_filter = LowPassFilter(alpha=0.8)
 # z_wheel_r_filter = LowPassFilter(alpha=0.8)
@@ -286,8 +286,8 @@ with mj.viewer.launch_passive(model, data) as viewer:
         F_l=left_length_vel.output+roll_pid.output+left_length_pos.output+G_m*cos(robot_state.x[3,0])+jumped_l
         F_r=right_length_vel.output-roll_pid.output+right_length_pos.output+G_m*cos(robot_state.x[4,0])+jumped_r
 
-        P_l=F_l*cos(robot_state.x[3,0])+U[0,0]*sin(robot_state.x[3,0])/left.length
-        P_r=F_r*cos(robot_state.x[4,0])+U[1,0]*sin(robot_state.x[4,0])/right.length
+        P_l=F_l*cos(robot_state.x[3,0])+U[0]*sin(robot_state.x[3,0])/left.length
+        P_r=F_r*cos(robot_state.x[4,0])+U[1]*sin(robot_state.x[4,0])/right.length
 
         z_wheel_l=z_body[2]-left.length_ddot.Diff(left.length_dot.diff_num)*cos(left.theta)+2*left.length_dot.diff_num*left.theta_dot.diff_num*sin(left.theta)+left.length*left.theta_ddot.Diff(left.theta_dot.diff_num)*sin(left.theta)+left.length*left.theta_dot.diff_num**2*cos(left.theta)
         z_wheel_r=z_body[2]-right.length_ddot.Diff(right.length_dot.diff_num)*cos(right.theta)+2*right.length_dot.diff_num*right.theta_dot.diff_num*sin(right.theta)+right.length*right.theta_ddot.Diff(right.theta_dot.diff_num)*sin(right.theta)+right.length*right.theta_dot.diff_num**2*cos(right.theta)
@@ -295,14 +295,29 @@ with mj.viewer.launch_passive(model, data) as viewer:
         Fn_l=P_l+m_l*g+z_wheel_l*m_l    
         Fn_r=P_r+m_r*g+z_wheel_r*m_r
 
-        theta_l, theta_r, B, K = robot_mpc.get_matrix(left.length,right.length)
+        theta, theta_l, theta_r, B, K = robot_mpc.get_matrix(left.length,right.length)
         
         robot_state.update_state(left, right, length, motor, imu, road)
         robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target, 0, 0, 0)
 
-        leso_d_hat=robot_mpc.leso(robot_state.x-robot_state.x_target,U)
+        # leso_d_hat=robot_mpc.leso(robot_state.x-robot_state.x_target,U)
        
         
+        x_target_ = np.asarray(robot_state.x_target).flatten()   # (10,)
+        
+        # 复制 N 步，得到参考轨迹 (N, 10)
+        x_ref = np.tile(x_target_, (robot_mpc.N, 1))  
+        
+
+        # U_lqr=K@(robot_state.x-robot_state.x_target)
+
+        # u_lqr = np.asarray(U_lqr).flatten()      
+        u_lqr = np.zeros(4)                 # (4,)
+        u_ref = np.tile(u_lqr, (robot_mpc.N, 1)) 
+
+        U_n=robot_mpc.ADMM(robot_state.x,x_ref,u_ref)
+        U=U_n[0]
+
         if(Fn_l<20) :
             robot_mpc.K[0,0]=0
             robot_mpc.K[0,1]=0
@@ -326,11 +341,23 @@ with mj.viewer.launch_passive(model, data) as viewer:
             robot_mpc.K[2,8]=0
             robot_mpc.K[2,9]=0
 
-            robot_mpc.lambda_[0:robot_mpc.N,0,0]=0
-            robot_mpc.lambda_[0:robot_mpc.N,2,0]=0
+            # robot_mpc.lambda_[0:robot_mpc.N,0,0]=0
+            # robot_mpc.lambda_[0:robot_mpc.N,2,0]=0
 
-            leso_d_hat[0,0]=0
-            leso_d_hat[2,0]=0   
+            # leso_d_hat[0,0]=0
+            # leso_d_hat[2,0]=0   
+   
+
+            for i in range(robot_mpc.N-1):
+                                        for j in range(robot_mpc.input_num):
+                                            x_ref[i,j]=robot_state.x[i]
+                                        x_ref[i,8]=theta_l
+                                        x_ref[i,9]=theta_r
+                                        
+            U[2]=0
+            
+            
+
 
         if(Fn_r<20) : 
             robot_mpc.K[1,0]=0
@@ -355,22 +382,29 @@ with mj.viewer.launch_passive(model, data) as viewer:
             robot_mpc.K[3,8]=0
             robot_mpc.K[3,9]=0
 
-            robot_mpc.lambda_[0:robot_mpc.N,1,0]=0
-            robot_mpc.lambda_[0:robot_mpc.N,3,0]=0
+            # robot_mpc.lambda_[0:robot_mpc.N,1,0]=0
+            # robot_mpc.lambda_[0:robot_mpc.N,3,0]=0
 
-            leso_d_hat[1,0]=0
-            leso_d_hat[3,0]=0
+            # leso_d_hat[1,0]=0
+            # leso_d_hat[3,0]=0
             
-        # U=K@(robot_state.x-robot_state.x_target)
+            
 
-        if times :
-            robot_mpc.update_forward(robot_state.x, robot_state.x_target, leso_d_hat)
-            U_n=robot_mpc.Admm(leso_d_hat,Fn_l,Fn_r)
-            U=U_n[0]
-            times=0
-        if not times :
-            U=U_n[1]
-            times=1
+            for i in range(robot_mpc.N-1):
+                            for j in range(robot_mpc.input_num):
+                                x_ref[i,j]=robot_state.x[i]
+                            x_ref[i,8]=theta_l
+                            x_ref[i,9]=theta_r
+            U[3]=0               
+
+
+        # if times :
+            # robot_mpc.update_forward(robot_state.x, robot_state.x_target, leso_d_hat)
+        
+        times=0
+        # if not times :
+        #     U=U_n[1]
+        #     times=1
 
         # U=U_last-F_convergence @ (np.block([[robot_state.update_state(left, right, length, motor,imu, road)],
         #                     [robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target)],
@@ -385,20 +419,20 @@ with mj.viewer.launch_passive(model, data) as viewer:
 
         
 
-        left.vmc(F_l, U[0,0], motor, length)
-        right.vmc(F_r, U[1,0], motor, length)
+        left.vmc(F_l, U[0], motor, length)
+        right.vmc(F_r, U[1], motor, length)
         # left.vmc(F_l+12, 0, motor, length)
         # right.vmc(F_r+12, 0, motor, length)
 
-        U_out = np.block([[left.t_front],[right.t_front],[left.t_back],[right.t_back],[U[2,0]],[U[3,0]]])
+        U_out = np.block([[left.t_front],[right.t_front],[left.t_back],[right.t_back],[U[2]],[U[3]]])
 
         if abs(imu["euler"][0])>1.0 or abs(imu["euler"][1])>1.0 :
-            U_out[0,0]=0
-            U_out[1,0]=0
-            U_out[2,0]=0
-            U_out[3,0]=0
-            U_out[4,0]=0
-            U_out[5,0]=0
+            U_out[0]=0
+            U_out[1]=0
+            U_out[2]=0
+            U_out[3]=0
+            U_out[4]=0
+            U_out[5]=0
        
         # if (abs(robot_state.x[3,0])>1.5 or abs(robot_state.x[4,0])>1.5) :
         #     U_out[0,0]=0
@@ -413,18 +447,18 @@ with mj.viewer.launch_passive(model, data) as viewer:
 
         send_list = [
             
-            U_n[0][0,0],
-            U_n[0][1,0],
-            U_n[0][2,0],
-            U_n[0][3,0],
-            U_n[1][0,0],
-            U_n[1][1,0],
-            U_n[1][2,0],
-            U_n[1][3,0],
-            U_n[2][0,0],
-            U_n[2][1,0],
-            U_n[2][2,0],
-            U_n[2][3,0],
+            U_n[0][0],
+            U_n[0][1],
+            U_n[0][2],
+            U_n[0][3],
+            U_n[1][0],
+            U_n[1][1],
+            U_n[1][2],
+            U_n[1][3],
+            U_n[2][0],
+            U_n[2][1],
+            U_n[2][2],
+            U_n[2][3],
             
         ]
         
@@ -435,30 +469,28 @@ with mj.viewer.launch_passive(model, data) as viewer:
         binary_data = struct.pack('<' + 'f' * len(send_list), *send_list)
         sock.sendto(binary_data + vofa_tail, (UDP_IP, UDP_PORT))
 
-        if U_out[0,0]>40:
-            U_out[0,0]=40
-        if U_out[0,0]<-40:
-            U_out[0,0]=-40
-        if U_out[1,0]>40:
-            U_out[1,0]=40
-        if U_out[1,0]<-40:  
-            U_out[1,0]=-40
-        if U_out[2,0]>40:
-            U_out[2,0]=40
-        if U_out[2,0]<-40:
-            U_out[2,0]=-40
-        if U_out[3,0]>40:
-            U_out[3,0]=40
-        if U_out[3,0]<-40:
-            U_out[3,0]=-40
-        if U_out[4,0]>7:
-            U_out[4,0]=7
-        if U_out[4,0]<-7:
-            U_out[4,0]=-7
-        if U_out[5,0]>7:
-            U_out[5,0]=7
-        if U_out[5,0]<-7:
-            U_out[5,0]=-7
+        if U_out[0]>50:
+            U_out[0]=50
+        if U_out[0]<-50:
+            U_out[0]=-50
+        if U_out[1]>50:
+            U_out[1]=50
+        if U_out[1]<-50:  
+            U_out[1]=-50
+        if U_out[2]>50:
+            U_out[2]=50
+        if U_out[2]<-50:
+            U_out[2]=-50
+        if U_out[3]>50:
+            U_out[3]=50
+        if U_out[3]<-50:
+            U_out[3]=-50
+        if U_out[4]>7:
+            U_out[4]=7
+        if U_out[4]<-7:
+            U_out[4]=-7
+        if U_out[5]<-7:
+            U_out[5]=-7
    
 
         for i in range(6):

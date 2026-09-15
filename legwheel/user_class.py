@@ -325,7 +325,7 @@ class Change_length_fit:
         return e3
     
 class Mpc:
-    def __init__(self,dt,K_coeff,P_coeff,S_coeff,A_coeff,B_coeff,AmBK_coeff,Le_coeff,theta_l_coeff,theta_r_coeff,N,rho,state,input):
+    def __init__(self,dt,K_coeff,P_coeff,Q_uu_coeff,A_coeff,B_coeff,AmBK_coeff,f_coeff,APf_coeff,BPf_coeff,Le_coeff,theta_coeff,theta_l_coeff,theta_r_coeff,N,rho,state,input):
 
         self.N = N
         self.state_num = state
@@ -334,67 +334,70 @@ class Mpc:
 
         self.K_coeff = K_coeff
         self.P_coeff = P_coeff
-        self.S_coeff = S_coeff
+        self.Q_uu_coeff = Q_uu_coeff
         self.A_coeff = A_coeff
         self.B_coeff = B_coeff
         self.AmBK_T_coeff = AmBK_coeff
+        self.f_coeff = f_coeff
+        self.APf_coeff = APf_coeff
+        self.BPf_coeff = BPf_coeff
+
         self.Le_coeff = Le_coeff
 
+
+        self.theta_coeff = theta_coeff
         self.theta_l_coeff = theta_l_coeff
         self.theta_r_coeff = theta_r_coeff
 
+        # self.K_ = np.zeros((input,state))
         self.K = np.zeros((input,state))
-        self.d = np.zeros((input,1))
-
+        self.P = np.zeros((state,state))
+        self.Q = np.array([100.0, 1.0, 5000.0, 4000.0, 4000.0,
+                    1.0, 1.0, 1.0, 1.0, 1.0])
+        self.R = np.array([1.0, 1.0, 1.0, 1.0])
+        self.Q_uu = np.zeros((input,input))
         self.A = np.zeros((state,state))
         self.B = np.zeros((state,input))
-
         self.AmBK_T = np.zeros((state,state))
+        self.f = np.zeros((state))
+        self.APf = np.zeros((state))
+        self.BPf = np.zeros((input))
 
-        self.Q = np.array([[10,0,0,0,0,0,0,0,0,0],
-                           [0,1,0,0,0,0,0,0,0,0],
-                           [0,0,5000,0,0,0,0,0,0,0],
-                           [0,0,0,4000,0,0,0,0,0,0],
-                           [0,0,0,0,4000,0,0,0,0,0],
-                           [0,0,0,0,0,1,0,0,0,0],
-                           [0,0,0,0,0,0,1,0,0,0],
-                           [0,0,0,0,0,0,0,1,0,0],
-                           [0,0,0,0,0,0,0,0,1,0],
-                           [0,0,0,0,0,0,0,0,0,1]])
-        
-        self.R = np.array([[1,0,0,0],
-                           [0,1,0,0],
-                           [0,0,1,0],
-                           [0,0,0,1]])
-
-        self.P = np.zeros((state,state))
-
-        self.S = np.zeros((input,input))
+        self.d = np.zeros((N-1,input))
+        self.q = np.zeros((N-1,state))
+        self.r = np.zeros((N-1,input))
+        self.p = np.zeros((N,state))
+        self.u = np.zeros((N-1,input))
+        self.x = np.zeros((N,state))
+        self.v = np.zeros((N,state))
+        self.z = np.zeros((N-1,input))
+        self.g= np.zeros((N,state))
+        self.y= np.zeros((N-1,input))
 
 
-        self.z = np.zeros((N,input,1))
-        self.e = np.zeros((N+1,state,1))
-        self.lambda_ = np.zeros((N,input,1))
         # self.H = np.zeros((state*(N+1)+input*N,state*(N+1)+input*N))
-        self.min=np.vstack([-50.0,-50.0,-5.0,-5.0])
-        self.max=np.vstack([50.0,50.0,5.0,5.0])
+        self.u_min=np.array([-50.0,-50.0,-6.0,-6.0])
+        self.u_max=np.array([50.0,50.0,6.0,6.0])
 
-        self.X = np.zeros((state+input,1))
-        self.y = np.zeros((state,1))
-        self.u = np.zeros((input,1))
-        self.C = np.block([np.eye(state), np.zeros((state,input))])  # 10x14
+        self.x_min=np.vstack([-0.5,-1.5,-1.5])
+        self.x_max=np.vstack([0.5,1.5,1.5])
+
+        # self.X = np.zeros((state+input,1))
+        # self.y = np.zeros((state,1))
+        # self.u = np.zeros((input,1))
+        # self.C = np.block([np.eye(state), np.zeros((state,input))])  # 10x14
         self.Le = np.zeros((state+input,state))
-    def leso(self, x, u):
-        self.y[0:10,0] = x[0:10,0]
-        self.u = u
-        Ae=np.block([[self.A,self.B],
-                     [np.zeros((4,10)),np.eye(4)]]) 
-        Be=np.vstack([self.B,np.zeros((4,4))])
+    # def leso(self, x, u):
+    #     self.y[0:10,0] = x[0:10,0]
+    #     self.u = u
+    #     Ae=np.block([[self.A,self.B],
+    #                  [np.zeros((4,10)),np.eye(4)]]) 
+    #     Be=np.vstack([self.B,np.zeros((4,4))])
 
-        self.X = Ae@self.X+Be@self.u+self.Le@(self.y-self.C@self.X)
+    #     self.X = Ae@self.X+Be@self.u+self.Le@(self.y-self.C@self.X)
 
-        return self.X[10:14,0:1]
-        pass
+    #     return self.X[10:14,0:1]
+    #     pass
 
     def get_matrix(self,leg_lenth_l,leg_lenth_r):
         x = leg_lenth_l
@@ -404,8 +407,12 @@ class Mpc:
         coeffs_flat_p = self.P_coeff.reshape(-1, 10)  # 视图，无拷贝
         coeffs_flat_a = self.A_coeff.reshape(-1, 10)  # 视图，无拷贝
         coeffs_flat_b = self.B_coeff.reshape(-1, 10)  # 视图，无拷贝
-        coeffs_flat_s = self.S_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_q_uu = self.Q_uu_coeff.reshape(-1, 10)  # 视图，无拷贝
         coeffs_flat_ambk_t = self.AmBK_T_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_f = self.f_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_apf = self.APf_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_bpf = self.BPf_coeff.reshape(-1, 10)  # 视图，无拷贝
+        coeffs_flat_theta = self.theta_coeff.reshape(-1, 10)  # 视图，无拷贝
         coeffs_flat_theta_l = self.theta_l_coeff.reshape(-1, 10)  # 视图，无拷贝
         coeffs_flat_theta_r = self.theta_r_coeff.reshape(-1, 10)
         coeffs_flat_le = self.Le_coeff.reshape(-1, 10)  # 视图，无拷贝
@@ -431,65 +438,49 @@ class Mpc:
         self.P[:, :] = (coeffs_flat_p @ features).reshape(10, 10)
         self.A[:, :] = (coeffs_flat_a @ features).reshape(10, 10)
         self.B[:, :] = (coeffs_flat_b @ features).reshape(10, 4)
-        self.S[:, :] = (coeffs_flat_s @ features).reshape(4, 4)
+        self.Q_uu[:, :] = (coeffs_flat_q_uu @ features).reshape(4, 4)
         self.AmBK_T[:, :] = (coeffs_flat_ambk_t @ features).reshape(10, 10)
-        theta_l = (coeffs_flat_theta_l @ features).reshape(1, 1)
-        theta_r = (coeffs_flat_theta_r @ features).reshape(1, 1)
+        self.f = (coeffs_flat_f @ features).reshape(10)
+        self.APf = (coeffs_flat_apf @ features).reshape(10)
+        self.BPf = (coeffs_flat_bpf @ features).reshape(4)
+        theta = (coeffs_flat_theta @ features).reshape(1)
+        theta_l = (coeffs_flat_theta_l @ features).reshape(1)
+        theta_r = (coeffs_flat_theta_r @ features).reshape(1)
         self.Le[:, :] = (coeffs_flat_le @ features).reshape(14, 10)
         
 
-        return theta_l, theta_r, self.B,self.K
-    
-    def update_forward(self, state, target,leso_d_hat):
-        error=np.zeros((self.N+1,self.state_num,1))
-        u=np.zeros((self.N,self.input_num,1))
-        error[0] = state - target
-        hat = leso_d_hat
-      
-        for i in range(self.N):
-            # u[i] = np.clip(-self.K @ error[i], self.min, self.max) 
-            # error[i+1] = self.A @ error[i] + self.B @ (u[i] - hat)  
-            u[i] = self.K @ error[i]
-            error[i+1] = self.AmBK_T.T@ error[i]   
-
-        self.z = u
-        self.e = error
-        return self.z
-    
-    def Admm(self,leso_d_hat,Fn_l,Fn_r):
-        u=np.zeros((self.N,self.input_num,1))
-        hat = leso_d_hat
-       
-        s = np.zeros((self.N+1,self.state_num,1))
+        return theta ,theta_l, theta_r, self.B,self.K
+    def updata_ref(self):
         
-        for j in range(20):
-            s[self.N] = self.P @ self.e[self.N]
+        pass
+
+    def ADMM(self, x_measure, x_ref, u_ref, eps_pri=1, eps_dua=1):
+        self.x[0] = np.asarray(x_measure).flatten() 
+        for j in range(1):
+            self.p[self.N-1]=-self.P@x_ref[self.N-1]-self.rho*(self.v[self.N-1]-self.g[self.N-1])
+            for i in range(self.N-2,-1,-1):
+                self.q[i] = -self.Q * x_ref[i] - self.rho * (self.v[i] - self.g[i])
+                self.r[i] = -self.R * u_ref[i] - self.rho * (self.z[i] - self.y[i])
+                self.d[i]=self.Q_uu@(self.B.T@self.p[i+1]+self.r[i]+self.BPf)
+                self.p[i] = self.AmBK_T@self.p[i+1]+self.q[i]+self.APf-self.K.T@self.r[i]
+            for i in range(self.N-1):
+                self.u[i] = -self.K@self.x[i]-self.d[i]
+                self.x[i+1] = self.A@self.x[i]+self.B@self.u[i]+self.f
+            for i in range(self.N):
+                self.v[i] = self.x[i]+self.g[i]#np.clip(self.x[i]+self.g[i], self.x_min, self.x_max)
+            for i in range(self.N-1):
+                self.z[i] = np.clip(self.u[i]+self.y[i], self.u_min, self.u_max)
 
             for i in range(self.N):
-                s[self.N - i - 1] =  self.AmBK_T @  s[self.N - i] + self.K.T @ (self.lambda_[self.N - i - 1] - self.rho * self.z[self.N - i - 1] )
-#self.AmBK_T
-          
-                        
-            # for i in range(self.N):
-                u[i] = self.K @ self.e[i] - self.S @ self.B.T @ s[i] - self.S @ (self.lambda_[i]- self.rho * self.z[i]) 
-                self.e[i+1] = self.A @ self.e[i] + self.B @ (u[i] - hat)
-                self.z[i]=np.clip(u[i]+self.lambda_[i]/self.rho,self.min,self.max)
-                                
-            # for i in range(self.N):
-                            
-            # for i in range(self.N):
-                self.lambda_[i]=self.lambda_[i]+self.rho * (u[i]-self.z[i])
-                
-        if(Fn_l<20 or Fn_r<20 ):
-                       s[:,0,0] = 0
-                       s[:,1,0] = 0
-                       s[:,2,0] = 0
-                       s[:,3,0] = 0
-                       s[:,4,0] = 0
-                       s[:,5,0] = 0
-                       s[:,6,0] = 0
-                       s[:,7,0] = 0
-                       s[:,8,0] = 0
-                       s[:,9,0] = 0
-                       self.S[:]=0
-        return self.z
+                self.g[i] += self.x[i] - self.v[i]
+            for i in range(self.N - 1):
+                self.y[i] += self.u[i] - self.z[i]
+
+            pri_x = np.max(np.abs(self.x - self.v))
+            pri_u = np.max(np.abs(self.u - self.z))
+            dua_x = self.rho * np.max(np.abs(self.v - self.v))
+            dua_u = self.rho * np.max(np.abs(self.z - self.z))
+
+            # if (pri_x < eps_pri and pri_u < eps_pri
+            #         and dua_x < eps_dua and dua_u < eps_dua):
+        return self.u#, True#self.x, 

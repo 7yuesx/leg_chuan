@@ -170,146 +170,18 @@ dM_eq_u_fun = sp.lambdify((state, accs, Ms, geom_syms, u_syms),
                           dM_eq_u_dz, modules='numpy', cse=True)
 
 
-# ==================== 7. 几何参数（照 linearize.py 用 MuJoCo 实测） ====================
-# 思路与 linearize.py 的 LegPoseSolver 一致：用 MuJoCo 模型按腿长摆位后，
-# 按连杆实际质量加权测腿质心。legwheel 的前后链通过弹簧连接（非刚性闭合），
-# 因此摆位规则为：
-#   1) 前链（lf0→lf1→轮）按 2 连杆逆解：轮子在髋正下方、髋→轮距 = L
-#      （膝角由 l_b、l_s 与 L 的余弦定理自然确定，取参考位形的解分支）；
-#   2) 后链（l20~l23）保持参考位形；
-#   3) 按 6 个连杆的实际质量加权求质心，投影到髋→轮轴线，
-#      得到 (c_h 轴向, c_x 切向, thp)。
-# 原解析两连杆公式保留为 _geometry_analytic，作为机构不可达时的兜底。
-
-_MJ_MODEL = None
-_MJ_DATA = None
-_GEO_FALLBACKS = 0
-
-
-def _mujoco_geometry(L):
-    """MuJoCo 实测单个腿长 L 的 (c_h, c_x, thp)；机构不可达时返回 None。"""
-    import mujoco
-    global _MJ_MODEL, _MJ_DATA
-    if _MJ_MODEL is None:
-        _MJ_MODEL = mujoco.MjModel.from_xml_path(
-            _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'mjmodel.xml'))
-        _MJ_DATA = mujoco.MjData(_MJ_MODEL)
-    m, d = _MJ_MODEL, _MJ_DATA
-
-    hip_id   = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, 'lf0_Link')
-    wheel_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, 'l_wheel_Link')
-    # 前链两个驱动关节：qpos 下标（base 自由关节占前 7 个）与关节 id
-    # leftjoint6（髋/摆动，无限位）、lf1_Joint（膝，有限位）
-    jidx = [7, 8]
-    jids = [1, 2]
-
-    lo, hi = [], []
-    for jid in jids:
-        if m.jnt_limited[jid]:
-            lo.append(m.jnt_range[jid, 0]); hi.append(m.jnt_range[jid, 1])
-        else:
-            lo.append(-np.inf); hi.append(np.inf)
-
-    d.qpos[:] = m.qpos0
-    d.qvel[:] = 0; d.ctrl[:] = 0
-
-    def res(q):
-        d.qpos[jidx] = q
-        d.qvel[:] = 0; d.ctrl[:] = 0
-        mujoco.mj_forward(m, d)
-        w = d.body(wheel_id).xpos - d.body(hip_id).xpos
-        # 轮子在髋正下方（x 对齐），髋→轮竖直距离 = L
-        return np.asarray([20 * w[0], 20 * (w[2] + L)])
-
-    sol = least_squares(res, m.qpos0[jidx], bounds=(lo, hi),
-                        xtol=1e-12, ftol=1e-12, gtol=1e-12, max_nfev=500)
-    if np.max(np.abs(res(sol.x))) > 1e-5:
-        return None
-
-    d.qpos[jidx] = sol.x
-    mujoco.mj_forward(m, d)
-    hip   = d.body(hip_id).xpos
-    wheel = d.body(wheel_id).xpos
-    axis  = (wheel - hip) / np.linalg.norm(wheel - hip)
-
-    com = np.zeros(3); tot = 0.0
-    for name in ['lf0_Link', 'lf1_Link', 'l20_Link', 'l21_Link', 'l22_Link', 'l23_Link']:
-        bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, name)
-        tot += m.body_mass[bid]
-        com += m.body_mass[bid] * d.xipos[bid]
-    com /= tot
-
-    dvec = com - hip
-    c_h = float(np.dot(dvec, axis))
-    t_axis = np.array([axis[2], 0.0, -axis[0]])
-    t_axis /= np.linalg.norm(t_axis)
-    c_x = float(np.dot(dvec, t_axis))
-    thp = float(np.arctan2(c_x, c_h))
-    return c_h, c_x, thp
-
-
-def _geometry_analytic(l_l_val, l_r_val):
-    """原解析两连杆腿质心公式（兜底/参考）。"""
-    l_lh = l_l_val / 2
-    l_rh = l_r_val / 2
-
-    H1 = np.arccos((l_b**2 + l_s**2 - l_l_val**2) / (2 * l_b * l_s))
-    c_x1 = l_b*l_s * np.sin(H1) / (2 * l_l_val)
-    c_h1 = l_lh / (1 + m_s / m_b)+(l_s / 2 * (l_s**2 + l_l_val**2 - l_b**2) / (2 * l_s * l_l_val))
-    thp1 = np.arctan2(c_x1, c_h1)
-
-    H2 = np.arccos((l_b**2 + l_s**2 - l_r_val**2) / (2 * l_b * l_s))
-    c_x2 = l_b*l_s * np.sin(H2) / (2 * l_r_val)
-    c_h2 = l_rh / (1 + m_s / m_b)+(l_s / 2 * (l_s**2 + l_r_val**2 - l_b**2) / (2 * l_s * l_r_val))
-    thp2 = np.arctan2(c_x2, c_h2)
-
-    return np.array([l_lh, l_rh, c_h1, c_h2, c_x1, c_x2, thp1, thp2])
-
-
+# ==================== 7. 几何参数（不作质心偏置） ====================
+# 腿质心直接按“位于髋→轮轴线中点”处理，不再反解连杆求偏置：
+#   - 侧向偏置 c_x = 0、相位 thp = 0 → 腿的势能项是 m*g*(L/2)*cos(theta)，
+#     对 theta 的平衡点正好落在 0，与下面固定用 theta_leg = 0 线性化一致；
+#   - c_h 取半腿长，使符号模型里的轴向距离 2*l_l - c_h = l_l（半腿长）。
+# 若想改成“质心落在轮心”，把下面的 c_h 换成 0.0 即可。
 def geometry(l_l_val, l_r_val):
-    """输入 l_l_val / l_r_val，输出 [l_l, l_r, c_h1, c_h2, c_x1, c_x2, theta_p1, theta_p2]。
-    几何照 linearize.py 用 MuJoCo 实测；机构不可达的腿长退回解析公式。"""
-    global _GEO_FALLBACKS
-    out = np.empty(8)
-    for i, L in enumerate((float(l_l_val), float(l_r_val))):
-        got = _mujoco_geometry(L)
-        if got is not None:
-            c_h, c_x, thp = got
-        else:
-            _GEO_FALLBACKS += 1
-            l_h = L / 2
-            H = np.arccos(np.clip((l_b**2 + l_s**2 - L**2) / (2 * l_b * l_s), -1, 1))
-            c_x = l_b * l_s * np.sin(H) / (2 * L)
-            c_h = l_h / (1 + m_s / m_b) + (l_s / 2 * (l_s**2 + L**2 - l_b**2) / (2 * l_s * L))
-            thp = np.arctan2(c_x, c_h)
-        out[2 + i] = c_h
-        out[4 + i] = c_x
-        out[6 + i] = thp
-    out[0] = float(l_l_val) / 2
-    out[1] = float(l_r_val) / 2
-    return out
+    """返回 [l_l, l_r, c_h1, c_h2, c_x1, c_x2, thp1, thp2]（前两项为半腿长）。"""
+    return np.array([l_l_val / 2.0, l_r_val / 2.0,
+                     l_l_val / 2.0, l_r_val / 2.0,
+                     0.0, 0.0, 0.0, 0.0], dtype=float)
 
-
-# ==================== 7.5 实测平衡腿角 ====================
-# 来自仿真测量（sim_leg_angle.py）：机器人静止时的腿角按 Leg.forward 定义
-#   theta = -atan2(x_c, y_c) + pitch
-# 对 8 个腿长特征点测得的稳态均值做 4 次加权拟合，系数单位弧度（高次到低次）。
-# 现在 compute_system 改为数值求解平衡方程（与 linearize.py force_horizontal
-# 一致：机身水平 + 腿角偏移），本拟合值仅作为数值求解未收敛时的兜底。
-# 测量范围 0.1187~0.3515 m，范围外取端点值（控制器腿长本身限制在 0.12~0.35）。
-_THETA_MEAS_RANGE = (0.1187, 0.3515)
-_THETA_FIT_COEFF = np.array([
-    87.88538943, -110.36430963, 52.12496719, -11.17598776, 0.97426381])
-
-
-def theta_balance_fit(L):
-    """实测平衡腿角 θ(L)，弧度。范围外取端点。"""
-    L = float(L)
-    if L < _THETA_MEAS_RANGE[0]:
-        L = _THETA_MEAS_RANGE[0]
-    elif L > _THETA_MEAS_RANGE[1]:
-        L = _THETA_MEAS_RANGE[1]
-    return float(np.polyval(_THETA_FIT_COEFF, L))
 
 
 # ==================== 8. compute_system 的 Python 版 ====================
@@ -317,40 +189,15 @@ def compute_system(l_l_val, l_r_val):
     """对应 MATLAB compute_system(l_l_val, l_r_val)。"""
     gv = geometry(l_l_val, l_r_val)
 
-    # ---- 求平衡点 theta_l1, theta_r1（linearize.py force_horizontal 同款）----
-    # 用势能 V 的数值梯度 + fsolve：机身俯仰固定为 theta_p（=0，水平），
-    # 求解 ∂V/∂θl = 0、∂V/∂θr = 0，得到保证机身水平的腿角偏移。
-    # 物理参数仍用本文件的 legwheel 数值（m、m_l、m_r、几何等）。
-    def dV(q_a):
-        qf = [theta_p, q_a[0], q_a[1]]     # [θ, θl, θr]，θ 固定为 theta_p
-        eps = 1e-6; grad = np.zeros(2)
-        V0 = V_balance(qf[0], qf[1], qf[2], gv)
-        for i in range(2):
-            qq = qf.copy(); qq[i+1] += eps
-            grad[i] = (V_balance(qq[0], qq[1], qq[2], gv) - V0) / eps
-        return grad
-
-    sol, info, ier, msg = fsolve(dV, [0.0, 0.0], maxfev=200,
-                                 xtol=1e-12, full_output=True)
-    res = np.max(np.abs(info.get("fvec", dV(sol))))
-    if ier != 1:
-        # fsolve 有时返回 ier=5（步长很小但误差估计不达标），此时解往往已收敛，
-        # 以残差为准而不是以返回码为准。
-        print(f"  WARNING: 平衡点 fsolve ier={ier} L=({l_l_val:.4f}, {l_r_val:.4f}) "
-              f"max|dV|={res:.3e}: {msg}")
-    # 有限差分梯度（eps=1e-6）的残差噪声约 1e-9，阈值放宽到 1e-7
-    if res <= 1e-7:
-        theta_leg_l, theta_leg_r = float(sol[0]), float(sol[1])
-    else:
-        # 兜底：残差未达标时退回实测拟合值（7.5 节），并告警
-        theta_leg_l = theta_balance_fit(l_l_val)
-        theta_leg_r = theta_balance_fit(l_r_val)
-        print(f"  WARNING: 平衡点数值求解残差未达标 L=({l_l_val:.4f}, {l_r_val:.4f}) "
-              f"max|dV|={res:.3e}，退回实测拟合值 "
-              f"theta=({theta_leg_l:.4f}, {theta_leg_r:.4f})")
+    # ---- 线性化点：暂时默认在 0 处线性化（原来的平衡点数值求解已去掉）----
+    # 即机身俯仰 θ = theta_p（=0，水平）、腿角 θl = θr = 0。
+    # 需要恢复“实际平衡点处线性化”时，在此处重新求解腿角偏移即可。
+    theta_leg_l = 0.0
+    theta_leg_r = 0.0
     theta_body = theta_p
 
-    # ---- 在平衡点处线性化 ----
+
+    # ---- 在 0 处线性化 ----
     p = np.array([0.0, 0.0, theta_body, theta_leg_l, theta_leg_r,
                   0.0, 0.0, 0.0, 0.0, 0.0])
     M0 = np.zeros(4)
@@ -402,15 +249,15 @@ def compute_system(l_l_val, l_r_val):
         raise ValueError(
             f"Q 不是半正定（最小特征值 {qmin:.3g}）：θ_l/θ_r 交叉项过大，"
             f"需满足 |offdiag| <= sqrt(q_l*q_r)")
-    P = -solve_discrete_are(A, B, Q, R)
-    K = -np.linalg.solve(B.T @ -P @ B + R, B.T @ -P @ A)
+    P = solve_discrete_are(A, B, Q, R)
+    K = np.linalg.solve(B.T @ +P @ B + R, B.T @ +P @ A)
     #直接拟合负矩阵
     # ---- S 和 AmBK ----
-    rho = 1
-    S = np.linalg.inv(R + rho * np.eye(4) + B.T @ -P @ B)
+    rho = 0.01
+    S = np.linalg.inv(R + rho * np.eye(4) + B.T @ +P @ B)
     # 注意：MPC 反向传播用的是 (A-BK)^T（用户确认），
     # 因此这里输出转置而不是 MATLAB 里的 inv(A-BK)。
-    AmBK = (A - B @ -K).T
+    AmBK = (A - B @ K).T
 
     # ---- LESO 观测器增益 Le（14 维增广：10 状态 + 4 输入扰动）----
     # 对应你的结构：
@@ -442,9 +289,11 @@ def compute_system(l_l_val, l_r_val):
 
 # ==================== 9. 采样 + 拟合 ====================
 def main():
-    # 采样区间：MuJoCo 实测几何可达范围（mjmodel.xml 前链 + lf1 关节限位）。
-    # 实测覆盖 0.10~0.30，超出会退回解析公式；为保证 100% 实测，限定在此区间。
-    l_vals = np.arange(0.10, 0.30, 0.02)
+    # 采样区间：0.10 ~ 0.40（含两端，步长 0.02，共 16 档 → 256 个采样点）。
+    # 用 linspace 而不是 np.arange：arange 不含右端点，会少取最后一档
+    # （旧写法 arange(0.10, 0.30, 0.02) 实际只到 0.28）。
+    l_min, l_max, l_step = 0.10, 0.40, 0.02
+    l_vals = np.linspace(l_min, l_max, int(round((l_max - l_min) / l_step)) + 1)
     # 拟合多项式总次数：2 = 原 MATLAB 的二元二次拟合；
     # 想要更高精度可改成 4（见 README 说明/末尾的实验结论）。
     FIT_DEGREE = 3
@@ -471,9 +320,6 @@ def main():
     if N == 0:
         raise RuntimeError("没有成功样本，无法拟合")
     print(f"成功样本数: {N}\n")
-    if _GEO_FALLBACKS:
-        print(f"几何兜底（解析公式）次数: {_GEO_FALLBACKS} "
-              f"（对应腿长超出 MuJoCo 机构可达范围）\n")
 
     x = np.array([s[0] for s in samples])
     y = np.array([s[1] for s in samples])
@@ -490,7 +336,7 @@ def main():
         'B':    (40,  10, 4),
         'P':    (100, 10, 10),
         'K':    (40,  4, 10),
-        'S':    (16,  4, 4),
+        'Quu_inv': (16, 4, 4),      # 即 TinyMPC 的 Quu_inv / C1
         'AmBK_T': (100, 10, 10),
         'Le':   (140, 14, 10),
         'theta_l': (1, 1, 1),
@@ -511,7 +357,7 @@ def main():
 
     coeffs = {}
     for name, (dim, rows, cols) in mat_info.items():
-        idx = {'A': 2, 'B': 3, 'K': 4, 'P': 5, 'S': 6, 'AmBK_T': 7,
+        idx = {'A': 2, 'B': 3, 'K': 4, 'P': 5, 'Quu_inv': 6, 'AmBK_T': 7,
                'Le': 8, 'theta_l': 9, 'theta_r': 10}[name]
         # 行主序展平每个矩阵，Y: (dim, N)
         Y = np.array([np.asarray(s[idx]).reshape(-1, order='C') for s in samples]).T
