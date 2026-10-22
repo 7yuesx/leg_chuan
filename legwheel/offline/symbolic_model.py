@@ -53,39 +53,75 @@ def build_model(p: Params = None) -> SymbolicModel:
     Ms = [M_l2, M_r2, M_l3, M_r3]
     geom_syms = [l_l, l_r, c_h1, c_h2, c_x1, c_x2, thp1, thp2]
 
-    # ---- 动能 T、势能 V ----
+    # # ---- 动能 T、势能 V ----
+    # T = (
+    #     sp.Rational(1, 2) * p.m_w
+    #     * (vx - sp.sqrt(p.d**2 + (sp.sin(thl) * 2 * l_l)**2) * vw
+    #        + sp.cos(thl) * 2 * l_l * vthl)**2
+    #     + sp.Rational(1, 2) * p.m_w
+    #     * (vx + sp.sqrt(p.d**2 + (sp.sin(thr) * 2 * l_r)**2) * vw
+    #        + sp.cos(thr) * 2 * l_r * vthr)**2
+    #     + sp.Rational(1, 2) * p.j_w_y
+    #     * ((vx - sp.sqrt(p.d**2 + (sp.sin(thl) * 2 * l_l)**2) * vw
+    #         + sp.cos(thl) * 2 * l_l * vthl) / p.r)**2
+    #     + sp.Rational(1, 2) * p.j_w_y
+    #     * ((vx + sp.sqrt(p.d**2 + (sp.sin(thr) * 2 * l_r)**2) * vw
+    #         + sp.cos(thr) * 2 * l_r * vthr) / p.r)**2
+    #     + sp.Rational(1, 2) * p.j_w_z * vw**2 * 2
+    #     + sp.Rational(1, 2) * p.j_l_y * vthl**2
+    #     + sp.Rational(1, 2) * p.m_l
+    #     * ((vx - sp.sqrt(p.d**2 + (sp.sin(thl) * (2 * l_l - c_h1))**2) * vw
+    #         + sp.cos(thl) * (2 * l_l - c_h1) * vthl)**2
+    #        + (c_h1 * vthl * sp.sin(thl))**2)
+    #     + sp.Rational(1, 2) * p.j_l_z * vw**2
+    #     + sp.Rational(1, 2) * p.j_r_y * vthr**2
+    #     + sp.Rational(1, 2) * p.m_r
+    #     * ((vx + sp.sqrt(p.d**2 + (sp.sin(thr) * (2 * l_r - c_h2))**2) * vw
+    #         + sp.cos(thr) * (2 * l_r - c_h2) * vthr)**2
+    #        + (c_h2 * vthr * sp.sin(thr))**2)
+    #     + sp.Rational(1, 2) * p.j_r_z * vw**2
+    #     + sp.Rational(1, 2) * p.j_y * vth**2
+    #     + sp.Rational(1, 2) * p.m
+    #     * (vx**2
+    #        + (p.l * vth * sp.sin(th))**2
+    #        + ((l_l + l_r) * (vthl + vthr) / 2 * sp.sin((thl + thr) / 2))**2)
+    #     + sp.Rational(1, 2) * p.J_z * vw**2)
+
     T = (
-        sp.Rational(1, 2) * p.m_w
-        * (vx - sp.sqrt(p.d**2 + (sp.sin(thl) * 2 * l_l)**2) * vw
-           + sp.cos(thl) * 2 * l_l * vthl)**2
-        + sp.Rational(1, 2) * p.m_w
-        * (vx + sp.sqrt(p.d**2 + (sp.sin(thr) * 2 * l_r)**2) * vw
-           + sp.cos(thr) * 2 * l_r * vthr)**2
-        + sp.Rational(1, 2) * p.j_w_y
-        * ((vx - sp.sqrt(p.d**2 + (sp.sin(thl) * 2 * l_l)**2) * vw
-            + sp.cos(thl) * 2 * l_l * vthl) / p.r)**2
-        + sp.Rational(1, 2) * p.j_w_y
-        * ((vx + sp.sqrt(p.d**2 + (sp.sin(thr) * 2 * l_r)**2) * vw
-            + sp.cos(thr) * 2 * l_r * vthr) / p.r)**2
-        + sp.Rational(1, 2) * p.j_w_z * vw**2 * 2
-        + sp.Rational(1, 2) * p.j_l_y * vthl**2
-        + sp.Rational(1, 2) * p.m_l
-        * ((vx - sp.sqrt(p.d**2 + (sp.sin(thl) * (2 * l_l - c_h1))**2) * vw
-            + sp.cos(thl) * (2 * l_l - c_h1) * vthl)**2
-           + (c_h1 * vthl * sp.sin(thl))**2)
-        + sp.Rational(1, 2) * p.j_l_z * vw**2
-        + sp.Rational(1, 2) * p.j_r_y * vthr**2
-        + sp.Rational(1, 2) * p.m_r
-        * ((vx + sp.sqrt(p.d**2 + (sp.sin(thr) * (2 * l_r - c_h2))**2) * vw
-            + sp.cos(thr) * (2 * l_r - c_h2) * vthr)**2
-           + (c_h2 * vthr * sp.sin(thr))**2)
-        + sp.Rational(1, 2) * p.j_r_z * vw**2
-        + sp.Rational(1, 2) * p.j_y * vth**2
-        + sp.Rational(1, 2) * p.m
-        * (vx**2
-           + (p.l * vth * sp.sin(th))**2
-           + ((l_l + l_r) * (vthl + vthr) / 2 * sp.sin((thl + thr) / 2))**2)
-        + sp.Rational(1, 2) * p.J_z * vw**2)
+            sp.Rational(1, 2) * p.m_w
+            * (vx - sp.sqrt(p.d**2 + (sp.sin(thl) *2 * l_l)**2) * vw #
+               - sp.cos(thl) * 2 * l_l * vthl)**2#
+            + sp.Rational(1, 2) * p.m_w
+            * (vx + sp.sqrt(p.d**2 + (sp.sin(thr) * 2 * l_r)**2) * vw #
+               - sp.cos(thr) * 2 * l_r * vthr)**2#
+            + sp.Rational(1, 2) * p.j_w_y
+            * ((vx - sp.sqrt(p.d**2 + (sp.sin(thl) * 2 * l_l)**2) * vw #
+                - sp.cos(thl) * 2 * l_l * vthl) / p.r)**2
+            + sp.Rational(1, 2) * p.j_w_y
+            * ((vx + sp.sqrt(p.d**2 + (sp.sin(thr) * 2 * l_r)**2) * vw #
+                - sp.cos(thr) * 2 * l_r * vthr) / p.r)**2
+            + sp.Rational(1, 2) * p.j_w_z * vw**2 * 2
+    
+            + sp.Rational(1, 2) * p.j_l_y * vthl**2
+            + sp.Rational(1, 2) * p.m_l
+            * ((vx - sp.sqrt(p.d**2 + (sp.sin(thl)**2 * (2 * l_l - c_h1)**2) ) * vw #
+                - sp.cos(thl) * (2 * l_l -c_h1) * vthl)**2# 
+               + (c_h1 * vthl * sp.sin(thl))**2)
+            + sp.Rational(1, 2) * p.j_l_z * vw**2
+    
+            + sp.Rational(1, 2) * p.j_r_y * vthr**2
+            + sp.Rational(1, 2) * p.m_r
+            * ((vx + sp.sqrt(p.d**2 + (sp.sin(thr)**2 * (2 * l_r - c_h2)**2)) * vw #
+                - sp.cos(thr) * (2 * l_r -c_h2) * vthr)**2#  
+               + (c_h2 * vthr * sp.sin(thr))**2)
+            + sp.Rational(1, 2) * p.j_r_z * vw**2
+            
+            + sp.Rational(1, 2) * p.j_y * vth**2
+            + sp.Rational(1, 2) * p.m
+            * ((vx + sp.cos(th) * p.l * vth )**2#+ (l_l + l_r) * (vthl + vthr) / 2 * sp.cos((thl + thr) / 2)
+               + (p.l * vth * sp.sin(th)
+               + (l_l + l_r) * (vthl + vthr) / 2 * sp.sin((thl + thr) / 2))**2)
+            + sp.Rational(1, 2) * p.J_z * vw**2)
 
     V = (p.m_l * p.g * sp.sqrt(c_h1**2 + c_x1**2) * sp.cos(thl - thp1)
          + p.m_r * p.g * sp.sqrt(c_h2**2 + c_x2**2) * sp.cos(thr - thp2)
@@ -107,12 +143,20 @@ def build_model(p: Params = None) -> SymbolicModel:
     EL = [euler_lagrange(i) for i in range(5)]
 
     # 与原 MATLAB 的 5 个方程一一对应（写成 F = 0）
+    # F = [
+    #     (M_l3 + M_r3) / p.r        - EL[0],   # eq1: x
+    #     (-M_l3 + M_r3) / p.r * p.d - EL[1],   # eq2: w
+    #     -(M_l2 + M_r2)             - EL[2],   # eq3: theta
+    #     (M_l2 - M_l3)              - EL[3],   # eq4: theta_l
+    #     (M_r2 - M_r3)              - EL[4],   # eq5: theta_r
+    # ]
+
     F = [
-        (M_l3 + M_r3) / p.r        - EL[0],   # eq1: x
-        (-M_l3 + M_r3) / p.r * p.d - EL[1],   # eq2: w
-        -(M_l2 + M_r2)             - EL[2],   # eq3: theta
-        (M_l2 - M_l3)              - EL[3],   # eq4: theta_l
-        (M_r2 - M_r3)              - EL[4],   # eq5: theta_r
+      (M_l3 + M_r3) / p.r                              - EL[0],   # eq1: x_body   不变
+      (-M_l3*sp.sqrt(p.d**2 + (sp.sin(thl) *2 * l_l)**2) +M_r3*sp.sqrt(p.d**2 + (sp.sin(thr) *2 * l_r)**2)) / p.r - EL[1],   # eq2: w
+      -(M_l2 + M_r2)                                   - EL[2],   # eq3: theta    不变
+      (M_l2 - M_l3 - M_l3 * (2*l_l) * sp.cos(thl) / p.r)  - EL[3],   # eq4: theta_l  多出力臂项
+      (M_r2 - M_r3 - M_r3 * (2*l_r) * sp.cos(thr) / p.r)  - EL[4],   # eq5: theta_r  多出力臂项
     ]
 
     # ---- 平衡点势能：对 (θ, θl, θr) 的驻点 ----

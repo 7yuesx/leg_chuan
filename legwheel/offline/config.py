@@ -46,17 +46,17 @@ PARAMS = Params(
 # ==================== 权重与配置 ====================
 # 状态: [x, w, theta, theta_l, theta_r, x_dot, w_dot, theta_dot,
 #        theta_dot_l, theta_dot_r]
-_Q_DIAG = np.array([100.0, 1.0, 5000.0, 4000.0, 4000.0,
-                    1.0, 1.0, 1.0, 1.0, 1.0])
-
+_Q_DIAG = np.array([10.0, 10.0, 8000.0, 6000.0, 6000.0,
+                    10.0, 10.0, 1.0, 1.0, 1.0])
+_R_DIAG = np.array([5.0, 5.0, 10.0, 10.0])
 MPC = MpcConfig(
     nx=10,
     nu=4,
     N=100,
     Ts=0.002,
-    rho=1.0,
+    rho=2.0,
     Q=np.diag(_Q_DIAG),
-    R=np.eye(4),
+    R=np.diag(_R_DIAG),
     obs_Qo_state=10.0,
     obs_Qo_d=10.0,
     obs_Ro=1000.0,

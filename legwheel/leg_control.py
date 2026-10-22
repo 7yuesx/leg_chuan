@@ -54,7 +54,7 @@ vofa_tail = b'\x00\x00\x80\x7f'
 
 
 
-model = mj.MjModel.from_xml_path("mjmodel.xml")#legwheel  mjmodel
+model = mj.MjModel.from_xml_path("legwheel.xml")#legwheel  mjmodel
 data = mj.MjData(model)
 
 dt = model.opt.timestep
@@ -72,7 +72,7 @@ right_length_vel = PID_control(kp=125, ki=0, kd=0, targ_value=0)
 
 roll_pid = PID_control(kp=2000, ki=0, kd=1000, targ_value=0)
 
-robot_mpc = Mpc(dt, K_coeff, P_coeff, Quu_inv_coeff, A_coeff, B_coeff, AmBK_T_coeff,f_coeff,APf_coeff,BPf_coeff,Le_coeff,theta_coeff, theta_l_coeff, theta_r_coeff, N=10, rho=1, state=10, input=4)
+robot_mpc = Mpc(dt, K_coeff, P_coeff, Quu_inv_coeff, A_coeff, B_coeff, AmBK_T_coeff,f_coeff,APf_coeff,BPf_coeff,Le_coeff,theta_coeff, theta_l_coeff, theta_r_coeff, N=10, rho=2, state=10, input=4)
 times = 1
 # z_wheel_l_filter = LowPassFilter(alpha=0.8)
 # z_wheel_r_filter = LowPassFilter(alpha=0.8)
@@ -315,8 +315,7 @@ with mj.viewer.launch_passive(model, data) as viewer:
         u_lqr = np.zeros(4)                 # (4,)
         u_ref = np.tile(u_lqr, (robot_mpc.N, 1)) 
 
-        U_n=robot_mpc.ADMM(robot_state.x,x_ref,u_ref)
-        U=U_n[0]
+
 
         if(Fn_l<20) :
             robot_mpc.K[0,0]=0
@@ -349,13 +348,11 @@ with mj.viewer.launch_passive(model, data) as viewer:
    
 
             for i in range(robot_mpc.N-1):
-                                        for j in range(robot_mpc.input_num):
-                                            x_ref[i,j]=robot_state.x[i]
-                                        x_ref[i,8]=theta_l
-                                        x_ref[i,9]=theta_r
-                                        
-            U[2]=0
-            
+                robot_mpc.y[i,0]=0
+                robot_mpc.y[i,2]=0
+                robot_mpc.d[i,0]=0
+                robot_mpc.d[i,2]=0
+        
             
 
 
@@ -391,11 +388,10 @@ with mj.viewer.launch_passive(model, data) as viewer:
             
 
             for i in range(robot_mpc.N-1):
-                            for j in range(robot_mpc.input_num):
-                                x_ref[i,j]=robot_state.x[i]
-                            x_ref[i,8]=theta_l
-                            x_ref[i,9]=theta_r
-            U[3]=0               
+                robot_mpc.y[i,1]=0
+                robot_mpc.y[i,3]=0
+                robot_mpc.d[i,1]=0
+                robot_mpc.d[i,3]=0           
 
 
         # if times :
@@ -417,7 +413,8 @@ with mj.viewer.launch_passive(model, data) as viewer:
         # U=-F_c @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target, theta_target-e2, left_target-e3_l, right_target-e3_r))
         # U=-K @ (robot_state.update_state(left, right, length, motor,imu, road)-robot_state.update_target(x_target, w_target, x_dot_target, w_dot_target, theta_target, left_target, right_target))
 
-        
+        U_n=robot_mpc.ADMM(robot_state.x,x_ref,u_ref)
+        U=U_n[0]
 
         left.vmc(F_l, U[0], motor, length)
         right.vmc(F_r, U[1], motor, length)

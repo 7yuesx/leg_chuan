@@ -352,9 +352,9 @@ class Mpc:
         # self.K_ = np.zeros((input,state))
         self.K = np.zeros((input,state))
         self.P = np.zeros((state,state))
-        self.Q = np.array([100.0, 1.0, 5000.0, 4000.0, 4000.0,
-                    1.0, 1.0, 1.0, 1.0, 1.0])
-        self.R = np.array([1.0, 1.0, 1.0, 1.0])
+        self.Q = np.array([10.0, 10.0, 8000.0, 6000.0, 6000.0,
+                    10.0, 10.0, 1.0, 1.0, 1.0])
+        self.R = np.array([5.0, 5.0, 10.0, 10.0])
         self.Q_uu = np.zeros((input,input))
         self.A = np.zeros((state,state))
         self.B = np.zeros((state,input))
