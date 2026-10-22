@@ -486,6 +486,8 @@ with mj.viewer.launch_passive(model, data) as viewer:
             U_out[4]=7
         if U_out[4]<-7:
             U_out[4]=-7
+        if U_out[5]>7:
+            U_out[5]=7
         if U_out[5]<-7:
             U_out[5]=-7
    
