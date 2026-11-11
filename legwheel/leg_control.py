@@ -54,7 +54,7 @@ vofa_tail = b'\x00\x00\x80\x7f'
 
 
 
-model = mj.MjModel.from_xml_path("legwheel.xml")#legwheel  mjmodel
+model = mj.MjModel.from_xml_path("scene_eyes.xml")#legwheel  mjmodel
 data = mj.MjData(model)
 
 dt = model.opt.timestep

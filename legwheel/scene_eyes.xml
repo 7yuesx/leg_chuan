@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="scene_eyes">
+  <include file="eyes_robot.xml" />
+  <asset>
+    <texture name="ds_sky" type="skybox" builtin="gradient" rgb1="0.055 0.065 0.105" rgb2="0.13 0.16 0.26" width="512" height="512" />
+    <texture name="ds_floor_tex" type="2d" builtin="checker" rgb1="0.105 0.115 0.145" rgb2="0.155 0.170 0.210" width="512" height="512" />
+    <material name="ds_floor" texture="ds_floor_tex" texrepeat="200 200" reflectance="0.02" shininess="0.06" specular="0.02" />
+  </asset>
+  <worldbody>
+    <light name="key" directional="true" pos="2.5 -2.0 3.0" dir="-0.45 0.35 -1" diffuse="1.00 0.97 0.92" specular="0.6 0.6 0.6" castshadow="true" cutoff="100" />
+    <light name="fill" directional="true" pos="-2.5 2.0 2.0" dir="0.55 -0.45 -1" diffuse="0.30 0.40 0.65" specular="0.1 0.1 0.15" castshadow="false" cutoff="100" />
+    <light name="top" directional="true" pos="0 0 4" dir="0 0 -1" diffuse="0.28 0.30 0.38" specular="0.05 0.05 0.06" castshadow="false" cutoff="100" />
+    <light name="rim" directional="true" pos="0.5 3.0 1.6" dir="-0.2 -1 -0.35" diffuse="0.55 0.60 0.75" specular="0.3 0.3 0.35" castshadow="false" cutoff="100" />
+    <geom material="ds_floor" name="floor" pos="0 0 0" size="40 40 40" type="plane" friction="1.0 0.005 0.0001" />
+  </worldbody>
+  <!-- <visual>
+    <headlight ambient="0.15 0.16 0.20" diffuse="0.30 0.31 0.36" specular="0.03 0.03 0.04" />
+    <global offwidth="1920" offheight="1440" />
+  </visual> -->
+  <sensor>
+    <gyro          name="body_gyro"    site="imu_site"/>
+    <framequat     name="perfect_quat" objtype="site" objname="imu_site"/>
+    <accelerometer name="body_accel"   site="imu_site"/>
+
+    <actuatorpos name="motor_l1_pos" actuator="m1"/>
+    <actuatorvel name="motor_l1_vel" actuator="m1"/>
+    <actuatorpos name="motor_r1_pos" actuator="m2"/>
+    <actuatorvel name="motor_r1_vel" actuator="m2"/>
+    <actuatorpos name="motor_l2_pos" actuator="m3"/>
+    <actuatorvel name="motor_l2_vel" actuator="m3"/>
+    <actuatorpos name="motor_r2_pos" actuator="m4"/>
+    <actuatorvel name="motor_r2_vel" actuator="m4"/>
+    <actuatorpos name="wheel_l_pos"  actuator="w1"/>
+    <actuatorvel name="wheel_l_vel"  actuator="w1"/>
+    <actuatorpos name="wheel_r_pos"  actuator="w2"/>
+    <actuatorvel name="wheel_r_vel"  actuator="w2"/>
+  </sensor>
+
+</mujoco>
